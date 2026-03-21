@@ -1,0 +1,593 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+::selection {
+  background: #ff6600;
+  color: #fff;
+}
+
+html, body {
+  background: #f0f0f0;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Allow long display equations to scroll horizontally */
+mjx-container[display="true"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+
+.title-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: linear-gradient(to bottom, #232436, #060611);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.center-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(300px, 50vw, 600px);
+  height: clamp(300px, 50vw, 600px);
+  background: rgba(6, 6, 17, 0.85);
+  padding: 3rem 2rem;
+  text-align: center;
+  font-family: "Space Mono", monospace;
+  font-weight: 400;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.center-card h1 {
+  font-size: clamp(2.5rem, 6vw, 5.5rem);
+  margin: 0 0 -1rem;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  padding: 0 0.2em;
+  background: linear-gradient(135deg, #ff6600, #ff1493);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(255, 102, 0, 0.3));
+}
+
+.center-card .subtitle {
+  font-size: clamp(1rem, 2.5vw, 2rem);
+  margin: 0 0 4rem 0;
+  font-weight: normal;
+  background: linear-gradient(135deg, #ff6600, #ff1493);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 4px rgba(255, 20, 147, 0.3));
+}
+
+.center-card .author {
+  font-size: clamp(0.8rem, 1vw, 1.6rem);
+  margin: 0;
+  background: linear-gradient(135deg, #96ff32, #00c8ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 4px rgba(0, 200, 255, 0.3));
+}
+
+/* Content styling */
+.content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: "Literata", serif;
+  counter-reset: figure-counter;
+  overflow-x: hidden;
+}
+
+/* Table of Contents styling */
+#table-of-contents {
+  background: transparent;
+  border: 2px solid #ff6600;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 2rem 0 3rem;
+  box-shadow: 0 2px 8px rgba(255, 102, 0, 0.1);
+}
+
+#table-of-contents h2 {
+  margin-top: 0;
+  color: #ff6600;
+  font-size: 1.5em;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+#toc-toggle {
+  background: none;
+  border: none;
+  color: #ff6600;
+  font-size: 0.8em;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  transition: transform 0.3s ease;
+  line-height: 1;
+}
+
+#toc-toggle:hover {
+  opacity: 0.7;
+}
+
+#table-of-contents.collapsed #toc-toggle {
+  transform: rotate(-90deg);
+}
+
+#table-of-contents.collapsed #toc-list {
+  display: none;
+}
+
+#toc-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+#toc-list li {
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+
+#toc-list a {
+  color: #333;
+  text-decoration: none;
+  display: inline-block;
+  padding: 0.2rem 0;
+  transition: color 0.2s ease;
+}
+
+#toc-list a:hover {
+  color: #ff6600;
+  text-decoration: underline;
+}
+
+/* Nested list styling for TOC */
+#toc-list ul {
+  list-style: none;
+  padding-left: 1.5rem;
+  margin-top: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+#toc-list > li > ul {
+  margin-top: 0.5rem;
+}
+
+#toc-list ul li {
+  margin-bottom: 0.3rem;
+  font-size: 1rem;
+}
+
+#toc-list ul ul {
+  padding-left: 1.2rem;
+}
+
+#toc-list ul ul li {
+  font-size: 0.95rem;
+}
+
+.content h1 {
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  font-size: 2.5em;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.content h2 {
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  font-size: 1.8em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.content h3 {
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  font-size: 1.4em;
+  font-style: italic;
+  margin-top: 1rem;
+  margin-bottom: 0.2rem;
+}
+
+.content p {
+  font-size: 1.25rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+/* Drop cap for the very first paragraph */
+.content > p:first-of-type::first-letter {
+  initial-letter: 3;
+  font-family: "Sacramento", cursive;
+  font-weight: 400;
+  color: #ff6600;
+  margin-right: 0.6em;
+  line-height: 1;
+}
+
+/* Fallback for browsers that don't support initial-letter */
+@supports not (initial-letter: 3) {
+  .content > p:first-of-type::first-letter {
+    float: left;
+    font-family: "Sacramento", cursive;
+    font-size: 3.5em;
+    line-height: 0.85;
+    margin: 0.1em 0.2em 0 0;
+    padding-right: 0.1em;
+    font-weight: 400;
+    color: #ff6600;
+  }
+}
+
+.content ul {
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+  padding-left: 0;
+}
+
+.content ol {
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+  padding-left: 0;
+}
+
+.content li {
+  font-size: 1.25rem;
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+}
+
+/* Nested lists indentation */
+.content ul ul,
+.content ul ol,
+.content ol ul,
+.content ol ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 2rem;
+}
+
+.content li ul,
+.content li ol {
+  margin-top: 0.5rem;
+}
+
+/* Blockquote styling */
+.content blockquote {
+  margin: 0 0 1rem;
+  padding: 0 3rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+/* Link styling */
+.content a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: #00c8ff;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+}
+
+.content a:hover {
+  color: #00c8ff;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+/* Footnote and figure links keep original formatting */
+.content .footnote-ref a,
+.content a.footnote-ref,
+.content .footnote-back,
+.content a.footnote-back,
+.content .fig-ref {
+  color: #00c8ff !important;
+  text-decoration: none !important;
+}
+
+.content .footnote-ref a:hover,
+.content a.footnote-ref:hover,
+.content .footnote-back:hover,
+.content a.footnote-back:hover,
+.content .fig-ref:hover {
+  color: #00c8ff;
+  text-decoration: underline;
+}
+
+/* MathJax equation reference links */
+.MathJax a {
+  color: #00c8ff !important;
+  text-decoration: none !important;
+}
+
+.MathJax a:hover {
+  text-decoration: underline !important;
+}
+
+/* Definition styling */
+dfn {
+  font-weight: 800;
+  font-style: italic;
+  color: #cc1376;
+}
+
+/* MathJax equation container - allow proper width for equation numbers */
+mjx-container[display="true"] {
+  margin: 1em 0;
+}
+
+/* Footnotes styling */
+.footnotes {
+  margin-top: 3rem;
+  border-top: 1px solid #ff6600;
+  padding-top: 1rem;
+}
+
+.footnotes hr {
+  display: none; /* Hide since we use border-top on section */
+}
+
+.footnotes-list {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 1rem;
+}
+
+.footnotes-list li {
+  position: relative;
+  padding-left: 3rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.footnotes-list li::before {
+  content: counter(list-item) ".";
+  position: absolute;
+  left: 0;
+  width: 2.5rem;
+  text-align: right;
+  color: #00c8ff;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.footnote-ref {
+  font-weight: 700;
+  padding: 0 0.1em;
+}
+
+.footnote-back {
+  font-size: 1rem;
+}
+
+/* Figure styling */
+.figure-wrapper {
+  margin: 1.5rem auto;
+  text-align: center;
+  width: 100%;
+}
+
+.plot-container {
+  padding: 0;
+  max-width: 500px;
+  margin: 0 auto;
+  width: 100%;
+}
+/* 
+#fig-complexity {
+  max-width: 500px;
+} */
+
+.figure-caption {
+  counter-increment: figure-counter;
+  font-size: 1.2rem;
+  line-height: 1.5;
+  margin: 0.3rem 0 1rem;
+}
+
+.figure-caption::before {
+  content: "Figure " counter(figure-counter) ". ";
+  font-weight: 700;
+  font-style: italic;
+}
+
+/* Example box styling */
+.example {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box,
+    linear-gradient(135deg, #ff6600, #ff1493) border-box;
+  padding: 0 1.5rem 1.2rem;
+  margin: 1.5rem calc(-1.5rem - 3px) 2rem;
+}
+
+.example h3 {
+  margin: 0 -1.5rem 0.5rem;
+  padding: 0.6rem 1.5rem;
+  background: linear-gradient(135deg, #ff6600, #ff1493);
+  color: #fff;
+}
+
+.example ul,
+.example ol {
+  padding-left: 1.5rem;
+}
+
+.example p:last-child {
+  margin-bottom: 0;
+}
+
+/* Ordered lists — equation-style (n) labels at column edge, text indented */
+.content > ol {
+  list-style: none;
+  padding-left: 3rem;
+}
+
+.content > ol > li {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.content > ol > li::before {
+  content: counter(list-item) ".";
+  position: absolute;
+  left: -3rem;
+  top: 0.5rem;
+  color: #ff6600;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.content > ol[reversed] > li::before {
+  content: "(" counter(list-item) ")";
+}
+
+/* Pseudocode block */
+ol.pseudocode {
+  font-family: "Space Mono", monospace;
+  line-height: 1.85;
+  padding: 0;
+  margin: 1.5rem 0;
+  list-style: none;
+  counter-reset: step-counter;
+  border-top: 2px solid #ff6600;
+  border-bottom: 2px solid #ff6600;
+}
+
+ol.pseudocode li {
+  font-size: 1.05rem;
+  line-height: 1.85;
+  margin-bottom: 0;
+}
+
+ol.pseudocode > li {
+  counter-increment: step-counter;
+  position: relative;
+  padding: 0.5rem 0.5rem 0.5rem 2.5rem;
+}
+
+ol.pseudocode > li + li,
+ol.pseudocode > ul + li {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding-top: 0.5rem;
+}
+
+ol.pseudocode > li::before {
+  content: counter(step-counter);
+  position: absolute;
+  left: 0.5rem;
+  color: #ff6600;
+  font-weight: 700;
+}
+
+ol.pseudocode > ul {
+  list-style: none;
+  padding-left: 1.2rem;
+  margin: -0.4rem 0 0.5rem;
+  color: #444;
+}
+
+ol.pseudocode > ul > li::before {
+  content: "· ";
+  color: #ff6600;
+}
+
+/* Inline citation links */
+.content .cite {
+  text-decoration: none;
+}
+
+.content .cite:hover {
+  color: #00c8ff;
+  text-decoration: none;
+}
+
+/* References */
+.references {
+  list-style: none;
+  margin: 1.5rem calc(-1.5rem - 3px) 0;
+  padding: 0;
+}
+
+.references li + li {
+  margin-top: 0.85rem;
+}
+
+.references a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  font-size: 1rem;
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box,
+    linear-gradient(135deg, #00c8ff, #96ff32) border-box;
+  padding: 0.95rem 1.5rem 1.2rem;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.references a:hover {
+  transform: translateY(-2px);
+  color: inherit;
+  text-decoration: none;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(0, 200, 255, 0.15),
+      rgba(150, 255, 50, 0.15)
+    ) padding-box,
+    linear-gradient(135deg, #00c8ff, #96ff32) border-box;
+  border-color: transparent;
+  box-shadow: 0 10px 22px rgba(45, 135, 165, 0.1);
+}
+
+.references .lead {
+  font-weight: 700;
+  color: #171a1d;
+}
