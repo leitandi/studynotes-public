@@ -273,10 +273,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create caption if data-caption exists
     const caption = div.getAttribute('data-caption');
-    if (caption) {
+    const captionHtml = div.getAttribute('data-caption-html');
+    if (caption || captionHtml) {
       const figcaption = document.createElement('figcaption');
       figcaption.className = 'figure-caption';
-      figcaption.textContent = caption;
+      if (captionHtml) {
+        figcaption.innerHTML = captionHtml;
+      } else {
+        figcaption.textContent = caption;
+      }
       wrapper.appendChild(plotContainer);
       wrapper.appendChild(figcaption);
     } else {
@@ -341,10 +346,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create caption if data-caption exists
     const caption = div.getAttribute('data-caption');
-    if (caption) {
+    const captionHtml = div.getAttribute('data-caption-html');
+    if (caption || captionHtml) {
       const figcaption = document.createElement('figcaption');
       figcaption.className = 'figure-caption';
-      figcaption.textContent = caption;
+      if (captionHtml) {
+        figcaption.innerHTML = captionHtml;
+      } else {
+        figcaption.textContent = caption;
+      }
       wrapper.appendChild(imageContainer);
       wrapper.appendChild(figcaption);
     } else {

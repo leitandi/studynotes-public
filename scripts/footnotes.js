@@ -13,7 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const footnotesSection = document.createElement('section');
   footnotesSection.className = 'footnotes';
   footnotesSection.innerHTML = '<hr><ol class="footnotes-list"></ol>';
-  content.appendChild(footnotesSection);
+  const referencesSection = document.getElementById('references');
+  if (referencesSection) {
+    content.insertBefore(footnotesSection, referencesSection);
+  } else {
+    content.appendChild(footnotesSection);
+  }
 
   const footnotesList = footnotesSection.querySelector('.footnotes-list');
 

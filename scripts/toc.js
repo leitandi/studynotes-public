@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Get all headers (h1, h2) within the content div, excluding the TOC header
   const headers = content.querySelectorAll("h1, h2");
   const tocHeaders = Array.from(headers).filter(
-    (h) => h.parentElement.id !== "table-of-contents"
+    (h) => h.parentElement.id !== "table-of-contents" && !h.hasAttribute("data-toc-ignore")
   );
 
   // Add IDs to headers if they don't have one
@@ -74,14 +74,27 @@ document.addEventListener("DOMContentLoaded", function () {
     tocList.appendChild(renderTocItem(item));
   });
 
-  // Add toggle functionality
-  const tocHeader = document.getElementById("toc-header");
-  const tocToggle = document.getElementById("toc-toggle");
-  const tocContainer = document.getElementById("table-of-contents");
+  function setupCollapsibleSection(containerId, headerId, toggleId) {
+    const container = document.getElementById(containerId);
+    const header = document.getElementById(headerId);
+    const toggle = document.getElementById(toggleId);
 
-  if (tocHeader && tocToggle && tocContainer) {
-    tocHeader.addEventListener("click", function () {
-      tocContainer.classList.toggle("collapsed");
+    if (!container || !header || !toggle) return;
+
+    function syncState() {
+      const expanded = !container.classList.contains("collapsed");
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    }
+
+    header.addEventListener("click", function () {
+      container.classList.toggle("collapsed");
+      syncState();
     });
+
+    syncState();
   }
+
+  // Add toggle functionality
+  setupCollapsibleSection("table-of-contents", "toc-header", "toc-toggle");
+  setupCollapsibleSection("references", "references-header", "references-toggle");
 });

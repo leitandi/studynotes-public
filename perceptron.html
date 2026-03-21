@@ -1,0 +1,2818 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Perceptron: A study note</title>
+    <link rel="stylesheet" href="perceptron.css" />
+
+    <!-- Google font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Literata:ital,opsz,wght@0,7..72,200..900;1,7..72,200..900&family=Sacramento&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- MathJax Version 4 -->
+    <script>
+      MathJax = {
+        loader: { load: ["[tex]/physics", "[tex]/boldsymbol"] },
+        tex: {
+          tags: "ams",
+          packages: { "[+]": ["ams", "physics", "boldsymbol"] },
+          macros: {
+            R: "\\mathbb{R}",
+            ind: "\\mathbf{1}",
+            argmin: "\\mathop{\\mathrm{arg\\,min}}",
+            argmax: "\\mathop{\\mathrm{arg\\,max}}",
+            E: "\\mathop{\\mathrm{E}}",
+            span: ["\\operatorname\{span\}"],
+          },
+        },
+      };
+    </script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"
+    ></script>
+
+    <!-- Plotly.js -->
+    <script
+      src="https://cdn.plot.ly/plotly-3.3.0.min.js"
+      charset="utf-8"
+    ></script>
+  </head>
+
+  <body>
+    <div class="title-container">
+      <canvas id="canvas"></canvas>
+      <div class="center-card">
+        <h1>PERCEPTRON</h1>
+        <p class="subtitle">A study note</p>
+        <p class="author">John C.</p>
+        <p class="author">March 2026</p>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- #region Introduction -->
+      <p>
+        Word on the street is that AI will be the end of humanity (which I
+        suppose is one way it solves all our problems), so I figured my
+        remaining days are best spent understanding the cause of my inevitable
+        demise and/or transcendence. And what better way to study the nature of
+        intelligence than writing a few lines of code and playing around with
+        toy datasets? No algorithm seemed better suited as a starting point than
+        perceptrons, "the simplest learning machines" as Minsky and Papert (<a
+          class="cite"
+          href="#ref-minsky-1969"
+          >1969</a
+        >) call them.
+      </p>
+
+      <p>
+        Of course, I immediately faced a roadblock: What exactly is a
+        perceptron? Textbooks cite Rosenblatt (<a
+          class="cite"
+          href="#ref-rosenblatt-1957"
+          >1957</a
+        >) as its origin, yet they define it in ways that depart significantly
+        from his original work. Perhaps this is because Rosenblatt was building
+        a physical device (his report includes circuit diagrams), the
+        architecture and nomenclature of which did not endure. But even the
+        formal, more abstract definition in Rosenblatt (<a
+          class="cite"
+          href="#ref-rosenblatt-1962"
+          >1962</a
+        >) &mdash; "a network of... units with a variable interaction matrix"
+        &mdash; sounds quite different from the simple "textbook" perceptron.
+      </p>
+
+      <p>
+        Unwisely, I decided to dig deeper. What I found was mostly layers of
+        confusion and obscurity, much like Dante's Hell or a multilayer
+        perceptron. The term perceptron can describe a device, an optimization
+        algorithm, a class of directed graphs, or a real function. Nilsson (<a
+          class="cite"
+          href="#ref-nilsson-1965"
+          >1965</a
+        >), for instance, describes it as "a two-layer machine," whereas Nilsson
+        (<a class="cite" href="#ref-nilsson-1998">1998</a>), yes, the same
+        author, treats it as a synonym for a simple function called the
+        threshold logic unit.
+      </p>
+
+      <p>
+        The journey wasn't entirely fruitless, for it yielded some kind of
+        framework that helped me understand different ideas in machine learning,
+        including variants of perceptrons such as PAPA (Gamba,
+        <a class="cite" href="#ref-gamba-1961">1961</a>) and voted perceptron
+        (Freund &amp; Schapire,
+        <a class="cite" href="#ref-freund-1999">1999</a>).
+      </p>
+
+      <p>
+        This note shares some of what I learned. The scope is limited to a
+        deterministic setting where output labels are determined by some
+        function, with most examples using binary output. I am no doubt
+        oversimplifying or outright wrong about some concepts here, but such is
+        the nature of study notes.
+      </p>
+      <!-- #endregion -->
+
+      <nav id="table-of-contents">
+        <h2 id="toc-header">
+          Table of Contents
+          <button id="toc-toggle" aria-label="Toggle table of contents">
+            &#x25BC;
+          </button>
+        </h2>
+        <ul id="toc-list"></ul>
+      </nav>
+
+      <!-- #region Preliminaries -->
+      <h1>Preliminaries</h1>
+      <p>
+        I establish some terminology around datasets and discuss a deterministic
+        data generating process that I assume throughout the post. Then I
+        ramble a bit about inductive reasoning.
+      </p>
+
+      <h2>Datasets</h2>
+      <p>
+        Given a pair of sets \((\mathcal{X}, \mathcal{Y})\), a
+        <dfn>dataset</dfn> is an element of \( (\mathcal{X} \times
+        \mathcal{Y})^N \) for some positive integer \(N\). I'll say
+      </p>
+      <ul>
+        <li>\(\mathcal{X}\) is the <dfn>input space</dfn>,</li>
+        <li>\(\mathcal{Y}\) is the <dfn>output space</dfn>,</li>
+        <li>
+          the \(i\)th coordinate \((x_i, y_i)\) of a dataset is its \(i\)th
+          <dfn>observation</dfn>, and
+        </li>
+        <li>\(N\) is the number of observations.</li>
+      </ul>
+
+      <p>
+        It is often useful to treat a dataset as an element of \(\mathcal{X}^N
+        \times \mathcal{Y}^N\), so that a dataset is compactly written as \((X,
+        y)\), where
+      </p>
+      <ul>
+        <li>
+          \( X := (x_1, \dots, x_N) \in \mathcal{X}^N\) is the input data, and
+        </li>
+        <li>
+          \( y := (y_1, \dots, y_N) \in \mathcal{Y}^N\) is the output data.
+        </li>
+      </ul>
+
+      <h3>Numeric datasets</h3>
+      <p>
+        Typically, the output is a real number, \( \mathcal{Y} \subseteq \R \),
+        in which case I treat the output data \(y \in \R^N\) as a column vector.
+        In many applications, the output space will be a finite set of integers
+        representing categories of the inputs.
+      </p>
+
+      <p>
+        Similarly, the input space \(\mathcal{X}\) typically consists of
+        \(K\)-tuples of real numbers, \(\mathcal{X} \subseteq \R^K\), in which
+        case I call \(K\) the number of input variables and write \(x_i =
+        (x_{i,1}, \dots, x_{i,K})\), treated as a row vector. This way, \(X =
+        (x_1, \dots, x_N)\) can be seen as an \(N \times K\) matrix, where
+        \(x_i\) is the \(i\)th row of \(X\), and \(x_{i, k}\) is the \(i\)th row
+        \(k\)th column entry of \(X\).
+      </p>
+
+      <div class="example">
+        <h3>Example: MNIST dataset</h3>
+        <p>
+          The <a href="https://doi.org/10.24432/C53K8Q">MNIST</a> database
+          contains images of handwritten digits. Its training dataset has \(N =
+          60000\) images depicting one of the ten digits. Each image consists of
+          28 by 28 grayscale pixels.
+          <a href="#fig-mnist-digit" class="fig-ref"></a> shows an example image
+          from the dataset.
+        </p>
+
+        <div
+          class="plotly-figure"
+          id="fig-mnist-digit"
+          data-src="figures/mnist_digit.json"
+          data-caption="An image from MNIST dataset depicting digit 4"
+        ></div>
+
+        <p>
+          An image can be represented as a \(28 \times 28\) matrix of pixel
+          brightness values. In
+          <a href="#fig-mnist-digit" class="fig-ref"></a>, each pixel value
+          ranges from 0 (brightest) to 1 (darkest). The matrix can be
+          "flattened" into a vector of length \(28 \times 28 = 784\) to fit the
+          typical setting, so that \(\mathcal{X} \subseteq \R^{784}\).
+        </p>
+
+        <p>
+          Each image is labeled with the digit it depicts, or more precisely,
+          the digit the writer of the number was asked to depict. For the image
+          shown in <a href="#fig-mnist-digit" class="fig-ref"></a>, the label is
+          4. Different output variables can be constructed from this label.
+          Although the most natural output is the labeled digit itself,
+          \(\mathcal{Y} = \{0, \dots, 9\}\), examples below consider a binary
+          output indicating whether the label is a specific digit.
+        </p>
+      </div>
+
+      <h2>Deterministic data generation</h2>
+      <p>
+        Consider a dataset whose output \(y_i\) for each observation \(i\) is
+        determined by some function \(f^*: \mathcal{X} \to \mathcal{Y}\), which
+        I refer to as the <dfn>data generating function</dfn>.<footnote>
+          There seem to be many names for this function. From the perspective of
+          estimation and learning, it is the target function, ground truth,
+          supervisor, or oracle. In
+          <a href="https://w.wiki/HEHu">computational learning theory</a>, it is
+          called a concept, although I find the term confusing when the output
+          value is not Boolean. I am inclined to call it a pattern, so
+          phrases like "learn the underlying pattern of the dataset" become
+          sensible. However, Duda et al. (<a
+            class="cite"
+            href="#ref-duda-2000"
+            >2000</a
+          >) use the term pattern to refer to an input value \(x \in
+          \mathcal{X}\).
+        </footnote>
+        More precisely, given a function \(f^*: \mathcal{X} \to \mathcal{Y}\)
+        and some input data \(X \in \mathcal{X}^N\), we can derive the output
+        data as \(y = (f^*(x_1), \dots, f^*(x_N))\) to complete the dataset
+        \((X, y)\). Denote such a dataset by \[ D(X, f^*) := \left( (x_1,
+        f^*(x_1)), \dots, (x_N, f^*(x_N)) \right). \]
+      </p>
+
+      <p>
+        For example, Rosenblatt (<a class="cite" href="#ref-rosenblatt-1957"
+          >1957</a
+        >) considers a dataset where each input \(x_i\) is a black-and-white
+        image of either a circle or a square, and \(f^*\) is an indicator that
+        \(x_i\) is an image of a circle. Another example from Minsky and Papert
+        (<a class="cite" href="#ref-minsky-1969">1969</a>) is a dataset where
+        each input \(x_i\) is a finite set, and \(f^*\) is an indicator that
+        \(x_i\) has an odd number of elements.
+      </p>
+
+      <p>The following 'family' notations will be useful:</p>
+      <ul>
+        <li>
+          Let \(F(\mathcal{X}, \mathcal{Y})\) denote the set of all functions
+          with domain \(\mathcal{X}\) and codomain \(\mathcal{Y}\): \[
+          F(\mathcal{X}, \mathcal{Y}) := \left\{f : \mathcal{X} \to
+          \mathcal{Y}\right\}. \]
+        </li>
+        <li>
+          Let \(\mathcal{D}(\mathcal{X}, \mathcal{Y})\) denote the set of all
+          datasets \(D(X, f^*)\) such that \(X \in \mathcal{X}^N\) for some
+          positive integer \(N\) and \(f^* \in F(\mathcal{X},
+          \mathcal{Y})\).<footnote>
+            We can relax the assumption that \(f^*\) is <em>any</em> function of
+            the given input and output spaces and instead specify a set of
+            functions (i.e. a subset of \(F(\mathcal{X}, \mathcal{Y})\), called
+            the <a href="https://w.wiki/GZT$">concept class</a>) from which the
+            data generating function can be selected.
+          </footnote>
+        </li>
+      </ul>
+
+      <h3>Drawing datasets</h3>
+      <p>
+        We have characterized datasets \(D(X, f^*)\) whose output values are
+        determined by a data generating function \(f^*\). This raises the
+        question of how the input data \(X\) are chosen from \(\mathcal{X}^N\),
+        and how the data generating function \(f^*\) is chosen from
+        \(F(\mathcal{X}, \mathcal{Y})\).
+      </p>
+
+      <p>
+        A common assumption about the input data \(X\) is that each input
+        observation \(x_i\) is drawn from \(\mathcal{X}\) according to some
+        common distribution \(G\). In other words, \(X = (x_1, \dots, x_N)\) is
+        a realization of an \(N\)-tuple of \(\mathcal{X}\)-valued
+        <a href="https://w.wiki/B6Wn">iid</a> random variables.
+      </p>
+
+      <p>
+        Under this iid assumption, the data generating process (not to be
+        confused with the data generating function) is fully described by
+        \((f^*, G, N)\) where
+      </p>
+      <ul>
+        <li>
+          \(f^* : \mathcal{X} \to \mathcal{Y}\) is a data generating function,
+        </li>
+        <li>
+          \(G\) is the distribution over \(\mathcal{X}\) that determines the
+          draw of each input observation, and
+        </li>
+        <li>\(N\) is the number of observations.</li>
+      </ul>
+
+      <p>
+        What about the choice of the data generating function \(f^*\)? Ideally,
+        we want to stay agnostic and cover a wide range of data spaces. So we
+        will see how far we can get without further assumptions.
+      </p>
+
+      <h2 id="induction-problem">Problem of induction</h2>
+      <p>
+        The learner's task is to figure out the data generating function \(f^*\)
+        given a dataset \(D(X, f^*)\).
+      </p>
+
+      <p>
+        If the given input data \(X\) covers the entire input space
+        \(\mathcal{X}\), then the task is trivial; the given dataset fully
+        describes the function \(f^*\).
+      </p>
+
+      <p>
+        The challenge arises when \(X\) covers only a portion of the input
+        space. The problem is that of inductive generalization: to draw a
+        conclusion about the whole function \(f^*\) based on a sample of its
+        evaluations.
+      </p>
+
+      <h3>No free lunch</h3>
+      <p>
+        We face an immediate problem with our agnostic approach to data
+        generation. To illustrate the problem, consider a dataset with input and
+        output spaces \(\mathcal{X} = \mathcal{Y} = \{1, \dots, 10\}\) and the
+        observations \(\{(1, 1), (2, 2), (4, 4), \dots, (10, 10)\}\). The
+        dataset is plotted in
+        <a href="#fig-complexity" class="fig-ref"></a>.
+      </p>
+
+      <div
+        class="plotly-figure"
+        id="fig-complexity"
+        data-src="figures/complexity.json"
+        data-caption="Two competing hypotheses"
+      ></div>
+
+      <p>
+        Given this dataset, the only thing we don't know about the data
+        generating function \(f^*\) is its evaluation at \(x = 3\). The figure
+        shows two hypotheses. Under hypothesis A, \(f^*_A(3) = 3\), so the
+        hypothesized data generating function is \(f^*_A(x) = x\). Under
+        hypothesis B, \(f^*_B(3) = 7\), so that \[f^*_B(x) = \begin{cases} x &
+        \text{if \(x \neq 3\)}, \\ 7 & \text{if \(x = 3\)}. \end{cases} \]
+      </p>
+
+      <p>
+        Which of these two hypotheses is more likely to be the true data
+        generating function? If we
+        <a href="https://w.wiki/GaBV">
+          translate our agnosticism about \(f^*\) into a uniform distribution
+        </a>
+        over all functions \(F(\mathcal{X}, \mathcal{Y})\), then the answer is
+        that both are equally likely, each having a 10% chance of being the true
+        data generating function conditional on the dataset.
+      </p>
+
+      <h3>Occam's razor</h3>
+      <p>
+        My brain (and presumably yours) sees that hypothesis A fits the
+        "pattern" while hypothesis B does not. Clearly, the "straight line"
+        function \(f^*_A\) is special in a way that \(f^*_B\) is not, so that we
+        prefer it as our prediction even without knowing what quantities \(x\)
+        and \(y\) represent. In other words, our
+        <a href="https://w.wiki/GVBW">induction is biased</a> toward some
+        hypotheses over others.
+      </p>
+
+      <p>
+        What makes the function \(f^*_A\) preferable to \(f^*_B\)? The usual
+        answer invokes <a href="https://w.wiki/5Dim">Occam's razor</a>:
+        hypothesis A is preferable because it is simpler. This raises the
+        question of whether and why simpler hypotheses should be preferred,
+        <!-- <footnote>
+          Kelly (<a class="cite" href="#ref-kelly-2007">2007</a>) provides one
+          answer.
+        </footnote> -->
+        but suppose we are willing to put aside the question and take the
+        principle as given. We see a glimpse of a general learning machine: it
+        imposes a probability distribution over \(F(\mathcal{X}, \mathcal{Y})\)
+        such that more complex functions are less likely, and updates the
+        distribution by Bayes' rule when given a dataset.
+      </p>
+
+      <p>
+        Alas, this <a href="https://w.wiki/8$Y$">induction procedure</a> has
+        seen little practical application. While a broad notion of
+        <a href="https://w.wiki/B6M9">complexity</a> that applies to arbitrary
+        functions does exist, it is not computable.
+      </p>
+
+      <p>
+        An alternative approach restricts the set of permitted hypotheses. This
+        breaks the uniform prior by assigning zero probability to prohibited
+        hypotheses. It also lets us define a "customized" notion of simplicity
+        tailored to the permitted hypotheses. This approach motivates the
+        following definition of the perceptron.
+      </p>
+      <!-- #endregion -->
+
+      <!-- #region Perceptron -->
+      <h1>Perceptron</h1>
+      <p>
+        Given the input and output spaces \((\mathcal{X}, \mathcal{Y})\), a
+        <dfn>perceptron</dfn> is a pair \((H, \phi)\), where
+      </p>
+      <ul>
+        <li>
+          \(H \subseteq F(\mathcal{X}, \mathcal{Y})\) is called the
+          <dfn>hypothesis space</dfn>, and
+        </li>
+        <li>
+          \(\phi: \mathcal{D}(\mathcal{X}, \mathcal{Y}) \to H\) is the
+          <dfn>learning algorithm</dfn> that, given a dataset, chooses a
+          function from the hypothesis space.
+        </li>
+      </ul>
+
+      <p>
+        Many modern textbooks define the perceptron much more narrowly, with
+        the hypothesis space involving a linear aggregation and the learning
+        algorithm involving iterative error correction. (I call this the
+        <a href="#simple-perceptron">&sect;simple perceptron</a>.) But
+        Rosenblatt (<a class="cite" href="#ref-rosenblatt-1957">1957</a>)
+        himself provides a broad definition
+        (predating Samuel's (<a class="cite" href="#ref-samuel-1959"
+          >1959</a
+        >) introduction of the term "machine learning"):
+      </p>
+
+      <blockquote>
+        ...it should be feasible to construct an electronic or electromechanical
+        system which will learn to recognize similarities or identities between
+        patterns of optical, electrical, or tonal information, in a manner which
+        may be closely analogous to the perceptual processes of a biological
+        brain. The proposed system... gains its reliability from the properties
+        of statistical measurements obtained from large populations of elements.
+        A system which operates according to these principles will be called a
+        <em>perceptron</em>.
+      </blockquote>
+
+      <p>
+        While general, the definition is not without bite, in that perceptrons
+        can learn <em>only</em> through data. No new knowledge is gained from
+        thinking alone. The definition also requires the learner to choose a
+        hypothesis from a given pool rather than constructing new hypotheses
+        based on observations. It is difficult not to suspect that these
+        constraints limit what perceptrons can learn, but maybe I will be proven
+        wrong.
+      </p>
+
+      <h2>Consistent hypotheses</h2>
+      <p>
+        Missing from the definition is any criterion for the learning
+        algorithm. Informally, we want the perceptron's learning algorithm
+        \(\phi\) to pick a function from the hypothesis space that is similar
+        to the actual data generating function:
+        \(\phi(D(X, f^*)) \approx f^*\). We can and will make precise the gap
+        between a hypothesis and the data generating function. We could then
+        think about the distribution of that gap given the probability
+        distribution of datasets.
+      </p>
+
+      <p>
+        Even without wading through formality, it would be a no-brainer for the
+        learning algorithm to choose a hypothesis that matches the given
+        dataset. If we <em>know</em> from the dataset that \(f^*(x_i) = y_i\)
+        for the observed \(x_i \in \mathcal{X}\), why would we choose a
+        hypothesis that says otherwise?
+      </p>
+
+      <p>
+        To be more precise, we say a hypothesis \(h \in H\) is
+        <dfn>consistent</dfn> with a dataset \((X, y)\) if \(h(x_i) = y_i\) for
+        all \(i = 1, \dots, N\). (Not to be confused with
+        <a href="https://w.wiki/HKoy">consistency</a> of an estimator.)
+      </p>
+
+      <p>
+        There are two remaining problems. One is that a consistent hypothesis
+        may not exist in the given hypothesis space, which is always possible
+        unless the hypothesis space is universal. Addressing this problem is
+        not too difficult. We can generalize the notion of consistency and
+        measure how well a hypothesis fits the given dataset. Then we can
+        simply choose the best-fitting hypothesis. The principle of
+        <a href="#erm">&sect;empirical risk minimization</a> formalizes this
+        idea.
+      </p>
+
+      <p>
+        The other problem is harder: there may be more than one consistent
+        hypothesis. Notice this situation is more likely if the dataset is
+        smaller or if the hypothesis space is broader. In this case, the
+        learning algorithm would need a way to pick a hypothesis from many and
+        essentially provide its own inductive bias.
+      </p>
+
+      <h2>Risk</h2>
+      <p>
+        To evaluate perceptrons, we want a more precise way to measure how well
+        a chosen hypothesis \(h\) matches the data generating function \(f^*\).
+        To do so, we can look at their gap \(f^*(x) - h(x)\) at each input
+        value \(x \in \mathcal{X}\), measure the size of that gap, and take an
+        appropriately weighted sum across all input values. The details below
+        introduce the machine learning lingo associated with this procedure.
+      </p>
+      <p>
+        Throughout this section, assume numerical datasets, so that
+        \(\mathcal{Y} \subseteq \R\) and \(\mathcal{X} \subseteq \R^K\).
+        Furthermore, assume an iid data generating process \((f^*, G)\). Then
+        the distribution of an \(\mathcal{X}\)-valued random variable is fully
+        determined by its
+        <a href="https://w.wiki/3ota">cdf</a>. As such, we let \(G\) denote the
+        cdf of the input observation.
+      </p>
+
+      <h3>Error</h3>
+      <p>
+        Define the <dfn>error</dfn> of a hypothesis \(h \in H\) at some input
+        value \(x \in \mathcal{X}\) as the difference between the true and the
+        hypothesized output value at \(x\): \[ \epsilon(x; h) := f^*(x) - h(x).
+        \]
+      </p>
+
+      <h3>Loss</h3>
+      <p>
+        The <dfn>loss function</dfn> \(L: \R \to \R_+\) is a non-negative
+        transformation of error with \(L(0) = 0\), capturing the size of the
+        error.<footnote>
+          The literature defines loss function as \(L : \R^2 \to \R_+\), taking
+          as arguments the true output value and the predicted value. This in
+          effect allows a broader definition of errors.
+        </footnote>
+        Examples include:
+      </p>
+      <ul>
+        <li>0-1 loss, \(L(\epsilon) = \ind(\epsilon \neq 0)\),</li>
+        <li>absolute loss, \(L(\epsilon) = |\epsilon|\), and</li>
+        <li>square loss, \(L(\epsilon) = \epsilon^2\).</li>
+      </ul>
+      <p>
+        Which loss function to use? The answer seems to be whichever one is
+        easy to work with. That depends on the context, so choosing the right
+        loss function seems to be something of an art.
+      </p>
+
+      <h3>Risk</h3>
+      <p>
+        Since error is defined locally at a given input value \(x \in
+        \mathcal{X}\), we need an aggregation scheme to evaluate the error (and
+        loss) of a hypothesis as a whole. A sensible scheme would take the sum
+        weighted by the probability of drawing the input value, i.e. the
+        expected value.
+      </p>
+
+      <p>
+        The expected value of the loss of a given hypothesis is called its
+        <dfn>risk</dfn>: \[ R(h) := \E\left[ L(\epsilon(\xi; h)) \right] =
+        \int_{\mathcal{X}} L(f^*(x) - h(x)) \dd{G(x)}, \] where \(\xi\) is a
+        random variable with distribution \(G\).
+      </p>
+
+      <h3>Estimating risk</h3>
+      <p>
+        Since the data generating function \(f^*\) and distribution \(G\) are
+        unknown, we cannot calculate the risk directly. We can, however,
+        estimate it as the sample mean of the loss.
+      </p>
+
+      <p>
+        Given some dataset \((X, y)\) and a hypothesis \(h \in H\), define the
+        error on the \(i\)th observation as \[ e_i(h) := y_i - h(x_i). \] (Under
+        the deterministic data generation process we've assumed, \(e_i(h) =
+        \epsilon(x_i; h)\) since \(y_i = f^*(x_i)\).)
+      </p>
+
+      <p>
+        The risk of a hypothesis \(h\) can be estimated from a dataset by
+        \[\begin{equation}\label{eq:risk_sample_mean} \hat{R}(h) := \frac{1}{N}
+        \sum_{i=1}^N L(e_i(h)). \end{equation}\]
+      </p>
+
+      <p>
+        If the hypothesis under consideration \(h\) is the evaluation of a
+        learning algorithm on some dataset \((X, y) = D(X, f^*)\), so that
+        \(h = \phi(D(X, f^*))\), then an unbiased risk estimate requires a
+        separate, independent dataset \((X', y') = D(X', f^*)\) where each
+        observation in \(X'\) is drawn from the same distribution \(G\). To
+        make the distinction, the dataset \(D(X, f^*)\) used by the learning
+        algorithm is called the <dfn>training dataset</dfn>, while the dataset
+        \(D(X', f^*)\) used to estimate the risk is called the
+        <dfn>testing dataset</dfn>.
+      </p>
+
+      <div class="example">
+        <h3>Example: Calculating and estimating risk</h3>
+        <p>
+          To illustrate the definitions, consider a data generating process with
+          unit interval input space \(\mathcal{X} = [0,1]\), real output space
+          \(\mathcal{Y} = \R\), uniform input draw \(G \sim \text{Uniform(0,
+          1)}\), and a cubic data generating function \(f^*(x) = 4x^3 - 6x^2 +
+          3x\). <a href="#fig-risk" class="fig-ref"></a> graphs the data generating
+          function as a dashed line. Let's calculate the risk of the hypothesis
+          \(h(x) = 0.2 + 0.6x\), graphed as a solid line.
+        </p>
+        <div
+          class="plotly-figure"
+          id="fig-risk"
+          data-src="figures/risk.json"
+          data-caption="Example dataset for risk calculation"
+        ></div>
+
+        <p>
+          Here, we know the data generating function, so we can directly
+          calculate the risk. Under the absolute value loss function
+          \(L(\epsilon) = |\epsilon|\) and the uniform draw, the risk is equal
+          to the area between \(f^*\) and \(h\): \[R(h) = \int_0^1 |(4x^3 - 6x^2
+          + 3x) - (0.2 + 0.6x)| \dd{x} = 0.065. \]
+        </p>
+
+        <p>
+          In practice, we do not know the data generating function \(f^*\), and
+          we can only estimate the risk using a dataset. The figure shows a
+          (testing) dataset with \(N = 10\) observations. The estimated risk of
+          \(h\) using this dataset is \[ \hat{R}(h) = \frac{1}{10}
+          \sum_{i=1}^{10} |y_i - (0.2 + 0.6x_i)| \approx 0.0658. \]
+        </p>
+      </div>
+
+      <h2>Hypothesis space</h2>
+      <h3>Parametric hypothesis space</h3>
+      <p>
+        The predominant way to specify the hypothesis space \(H\) is as the set
+        of functions obtained by slicing a "hypothesis generating function"
+        \[ h : \mathcal{X} \times \Theta \to \mathcal{Y}. \] Here,
+        \(\Theta \subseteq \R^S\) is called the <dfn>parameter space</dfn>. Each
+        hypothesis in the space generated by \(h\) is the function
+        \(h_\theta : \mathcal{X} \to \mathcal{Y}\) defined by \(h_\theta(x_i) =
+        h(x_i, \theta)\).
+      </p>
+
+      <p>
+        For example, if \(\mathcal{X} = \mathcal{Y} = \R\), then the function
+        \(h : \R \times \R^2 \to \R\) defined by \(h(x, \theta) := \theta_0 +
+        \theta_1 x\) generates the hypothesis space of all affine functions in
+        \(F(\R, \R)\).
+      </p>
+
+      <p>
+        I will at times say "hypothesis \(\theta\)" for a parameter \(\theta \in
+        \Theta\) to mean the corresponding hypothesis \(h_\theta \in H\). Since
+        the mapping from \(\theta\) to \(h_\theta\) is by construction
+        surjective, the property that holds for all parameters \(\theta \in
+        \Theta\) holds for all hypotheses \(h \in H\) as well.
+      </p>
+
+      <h3>Estimation and approximation risks</h3>
+      <p>
+        The following decomposition of risk is useful to structure the
+        discussion of hypothesis spaces. Consider the minimum possible risk
+        achievable under some hypothesis space \(H\): \[ R^*(H) := \inf_{h \in
+        H} \; R(h). \] We can decompose the risk associated with the hypothesis
+        chosen by some learning algorithm \(h = \phi(D(X, f^*))\) as
+        \[\begin{equation}\label{eq:risk_decomp} R(h) = \underbrace{\left( R(h)
+        - R^*(H) \right)}_{\text{estimation}} +
+        \underbrace{R^*(H).}_{\text{approximation}} \end{equation}\] Note each
+        summand, labeled estimation and approximation, is non-negative.
+      </p>
+
+      <p>
+        Approximation risk depends solely on the hypothesis space \(H\) and
+        generally grows as the space becomes more restrictive. If the true data
+        generating function \(f^*\) lies in the hypothesis space, then this
+        term is zero. Otherwise, its magnitude depends on how well one of the
+        hypotheses in \(H\) can approximate \(f^*\).
+      </p>
+      <p>
+        Since restricting the hypothesis space generally increases approximation
+        risk, it reduces the overall risk only if the corresponding reduction in
+        estimation risk more than offsets. The only way to reduce estimation
+        risk is indirectly through \(\phi\). (The decomposition is pointless if
+        \(h\) is fixed.) In other words, restrictions on the hypothesis space
+        are helpful only if they allow the learning algorithm to perform better.
+      </p>
+
+      <p>
+        Restrictions on the hypothesis space can help the learning algorithm by
+        introducing inductive bias in two ways. First, they break the "uniform"
+        prior by assigning zero probability to some functions. We can apply
+        Occam's razor by simply excluding "complex" functions as candidates.
+      </p>
+      <p>
+        Second, they make inductive bias easier to implement. The key challenge
+        with a universal prior is the difficulty of ranking simplicity among
+        arbitrary functions. This becomes easier when we only need to rank
+        functions within a specific class. For example, if we restrict the
+        hypothesis space to polynomials (among all real functions), the degree
+        of a polynomial serves as an intuitive and simple (albeit coarse)
+        measure of complexity.
+      </p>
+      <p>
+        In short, a successful hypothesis space specification is sufficiently
+        flexible to limit approximation risk, and sufficiently structured to
+        yield an effective complexity measure.
+      </p>
+
+      <div class="example">
+        <h3>Example: Calculating risk components</h3>
+        <p>
+          Consider again the example illustrated in
+          <a href="#fig-risk" class="fig-ref"></a>. Suppose we consider the
+          hypothesis space \(H\) consisting of all affine functions, which we
+          can specify parametrically with the hypothesis generating function
+          \(h(x; \theta) := \theta_0 + \theta_1 x\), where \(x \in \mathcal{X} =
+          [0,1]\) and \(\theta \in \Theta = \R^2\).
+        </p>
+
+        <p>
+          Continuing with the absolute loss, the approximation risk is \[ R^*(H)
+          = \inf_{\theta \in \R^2} \int_0^1 |(4x^3 - 6x^2 + 3x) - (\theta_0 +
+          \theta_1 x)| \dd{x} = 0.0625 \] achieved at \(\theta = (0.25, 0.5)\).
+          For the example hypothesis \((0.2, 0.6)\), which has the risk of
+          \(R(h) = 0.065\), the estimation risk is \(0.065 - 0.0625 = 0.0025\).
+        </p>
+
+        <p>
+          On the other hand, if the hypothesis space \(H\) includes all
+          polynomials of order up to 3, then \(f^* \in H\), so the approximation
+          risk is zero, and the estimation risk of the example hypothesis \(h\)
+          is \(0.065\).
+        </p>
+      </div>
+
+      <h2 id="erm">Empirical risk minimization</h2>
+      <p>
+        If we use the risk \(R(h)\) as our performance metric, a natural
+        approach is to minimize its sample analog. This leads to the principle
+        of
+        <dfn>empirical risk minimization (ERM)</dfn>: given a hypothesis space
+        \(H\) and a training dataset \(D(X, f^*)\), we choose a hypothesis from
+        \(H\) that minimizes the empirical risk:
+        \[\begin{equation}\label{eq:erm} \min_{h \in H} \; \hat{R}(h),
+        \end{equation}\] where \(\hat{R}\) is defined in
+        \(\eqref{eq:risk_sample_mean}\) but using the training rather than
+        testing dataset.
+      </p>
+
+      <p>
+        A technical issue arises here: if \(H\) is infinite, the minimum may not
+        exist. We could avoid the issue by saying an algorithm follows the ERM
+        principle if, for a given threshold \(\epsilon > 0\), it chooses a
+        hypothesis that yields an empirical risk within \(\epsilon\) of the
+        infimum.
+      </p>
+
+      <p>
+        This formalism seems excessive here, so I will assume the infimum is
+        attained and use equality. Specifically, if \(\phi\) follows the ERM
+        principle, then the chosen hypothesis \(\hat{h} = \phi(D(X, f^*))\)
+        satisfies \[ \hat{R}(\hat{h}) = \inf_{h \in H} \; \hat{R}(h). \]
+      </p>
+
+      <!-- <h3>Example: ERM</h3>
+      <p>
+        Let's continue with the example shown in
+        <a href="#fig-risk" class="fig-ref"></a>. Suppose the dataset shown is
+        now a training dataset and the hypothesis space \(H\) consists of all
+        affine functions generated by \(h(x; \theta) = \theta_0 + \theta_1 x\).
+        Then the ERM learning algorithm using the absolute loss solves \[
+        \argmin_{\theta \in \R^2} \; \frac{1}{10}\sum_{i=1}^{10} |y_i -
+        (\theta_0 + \theta_1 x_i)|. \] The minimum is achieved at \(\theta^*
+        \approx (0.0855, 0.7438)\). Let \(\hat{h} = h_{\theta^*}\) denote the
+        corresponding hypothesis. Then the resulting empirical risk is
+        \(\hat{R}(\hat{h}) \approx 0.0534\), and the true risk is \(R(\hat{h})
+        \approx 0.0823\).
+      </p> --->
+
+      <div class="example">
+        <h3>Example: ERM with square loss</h3>
+        <p>
+          Suppose the hypothesis space is parameterized by \(h : \mathcal{X}
+          \times \Theta \to \mathcal{Y}\), where \(\Theta \subseteq \R^S\).
+          Under the square loss function \(L(\epsilon) = \epsilon^2\), the ERM
+          problem \(\eqref{eq:erm}\) becomes: \[ \min_{\theta \in \Theta} \;
+          \frac{1}{N} \sum_{i=1}^N e_i^2(\theta), \quad \text{where }
+          e_i(\theta) := y_i - h(x_i, \theta). \]
+        </p>
+
+        <p>
+          If \(h\) is differentiable in \(\theta\), the
+          <a href="https://w.wiki/GtJG">first-order condition</a> for a minimum
+          is: \[ \sum_{i=1}^N e_i(\theta) \left(\frac{\partial h(x_i,
+          \theta)}{\partial \theta_s} \right) = 0 \] for each \(s = 1, \dots,
+          S\). In matrix form, \[\begin{equation}\label{eq:erm_foc} J^\mathsf{T}
+          e = 0, \end{equation}\]
+          <a href="https://w.wiki/3rgx"
+            >where \(J\) is the \(N \times S\) matrix whose \((i, s)\)-entry is
+            \(\frac{\partial h(x_i, \theta)}{\partial \theta_s}\),</a
+          >
+          and \(e\) is the \(N\)-vector of residuals \(e_i(\theta)\).
+        </p>
+
+        <p>
+          If \(h\) is additionally convex in \(\theta\), then the first order
+          condition is also sufficient, so the equation \(\eqref{eq:erm_foc}\)
+          characterizes the solution.
+        </p>
+
+        <p>
+          For instance, if \(h : \R \to \R^{1+d}\) is a polynomial function,
+          that is, \(h(x, \theta) = \theta_0 + \theta_1 x + \dots + \theta_d
+          x^d\), then it is linear in \(\theta\), and the first order condition
+          \(\eqref{eq:erm_foc}\) simplifies to a linear equation \[A \theta =
+          b\] where \(A\) is a \((1+d)\) square matrix whose \((s, t)\)-entry,
+          counting from 0, is \(A_{st} = \sum_{i=1}^N x_i^{s+t}\), and \(b\) is
+          a \((1+d)\) vector whose \(s\)th entry, counting from 0, is
+          \(\sum_{i=1}^N y_i x_i^s\).<footnote>
+            If \(h(x, \theta) = \theta \cdot (1, x, \dots, x^d)\), then
+            \(\frac{\partial h(x, \theta)}{\partial \theta_s} = x^s\). The first
+            order condition becomes \(\sum_{i=1}^N e_i(\theta) x_i^s = 0\) for
+            each \(s = 0, \dots, d\). Expanding \(e_i(\theta) = y_i - \theta
+            \cdot (1, x_i, \dots, x_i^d)\), the condition is \(\sum_{i=1}^N y_i
+            x_i^s = \theta \cdot (\sum_{i=1}^N x_i^s, \dots, \sum_{i=1}^N
+            x_i^{d+s})\) for each \(s\).
+          </footnote>
+        </p>
+      </div>
+
+      <div class="example">
+        <h3>Example: Polynomial fitting the Runge function</h3>
+        <p>
+          If we follow the ERM principle, then the only remaining design
+          decision is the choice of the hypothesis space. Looking back at the
+          decomposition \(\eqref{eq:risk_decomp}\), we need to see how \(H\)
+          balances the trade-off between estimation and approximation.
+        </p>
+
+        <p>
+          Consider the example, due to <a href="https://w.wiki/DRdm">Runge</a>,
+          that illustrates the potential tradeoff between estimation and
+          approximation risks that comes with the choice of the hypothesis
+          space. The setting involves an interval input space \(\mathcal{X} =
+          [-1, 1]\) and the real output space \(\mathcal{Y} = \R\). The data
+          generating function is given by \(f^*(x) := \frac{1}{1 + 25x^2}\),
+          shown in <a href="#fig-runge" class="fig-ref"></a> with a dotted line,
+          along with \(N = 14\) observations drawn from a uniform distribution.
+        </p>
+
+        <div
+          class="plotly-figure"
+          id="fig-runge"
+          data-src="figures/runge.json"
+          data-caption="Data generation under the Runge function"
+        ></div>
+
+        <p>
+          Let the hypothesis space \(H_k\) be the set of polynomials with degree
+          at most \(k\). Since \(H_{k} \subseteq H_{k + 1}\), we must have
+          \(R^*(H_k) \geq R^*(H_{k+1})\) (the best can only get better when you
+          add more candidates). Nonetheless, the estimation risk may grow with
+          \(k\) to the extent of raising the overall risk.
+        </p>
+
+        <div
+          class="plotly-figure"
+          id="fig-runge-risks"
+          data-src="figures/runge_risks.json"
+          data-caption="Polynomial degree and risks"
+        ></div>
+
+        <p>
+          <a href="#fig-runge-risks" class="fig-ref"></a> illustrates this
+          tradeoff by charting the (square loss) risk of the ERM hypothesis
+          chosen from \(H_k\), given the dataset shown in
+          <a href="#fig-runge" class="fig-ref"></a>. The risk of each hypothesis
+          is decomposed into the estimation and approximation risks. As
+          expected, the approximation risk falls with \(k\). With this
+          particular dataset, the overall risk initially diminishes with \(k\)
+          but starts to rise beyond \(k = 8\).
+        </p>
+
+        <p>
+          To hint at the source of the rising estimation error,
+          <a href="#fig-runge" class="fig-ref"></a>
+          plots two of the ERM hypotheses, one for \(k = 4\) and other for \(k =
+          12\). As expected, the 12-degree polynomial hypothesis fits the
+          observations better and is in fact closer to the true data generating
+          function near the center of the domain. However, near the extremities
+          of the domain, beyond the observation range, it deviates
+          significantly, shooting up rather than tapering down. The flexibility
+          of the hypothesis space, which allows low approximation error, permits
+          an "unusual" behavior (perhaps unusual under the implicit prior
+          distribution of the data generating functions) outside of the observed
+          range, leading to high estimation error.
+        </p>
+      </div>
+
+      <h2>Convergence of ERM</h2>
+      <p>
+        Does the ERM estimation error go to zero as the number of observations
+        grows? Not always. For example, consider the data generating process
+        where
+      </p>
+      <ul>
+        <li>the input space is the unit interval, \(\mathcal{X} = [0, 1]\),</li>
+        <li>the output space is binary, \(\mathcal{Y} = \{0, 1\}\),</li>
+        <li>the data generating function is constant, \(f^*(x) = 1\), and</li>
+        <li>
+          the input distribution is uniform, \(G \sim \text{Uniform}(0, 1)\).
+        </li>
+      </ul>
+
+      <p>
+        Consider a perceptron with the unrestricted hypothesis space \(H =
+        F(\mathcal{X}, \mathcal{Y})\), implying zero approximation risk, and the
+        learning algorithm that chooses the hypothesis \(h(x) = \ind(x \in X)\)
+        for any given dataset \((X, y)\). That is, it predicts 1 if the input
+        value is in the dataset but predicts 0 everywhere else. As perverse as
+        this hypothesis seems, it is an ERM solution since it achieves zero
+        empirical risk for any dataset. And yet, since it is correct only on
+        finitely many points within the interval domain, its estimation risk is
+        1 regardless of the dataset. So the estimation risk does not diminish
+        with the number of observations.
+      </p>
+
+      <p>
+        Again, the problem is that the hypothesis space is too broad, allowing
+        pathological hypotheses. On the other extreme, if the hypothesis space
+        is a singleton, then the estimation risk (of any learning algorithm)
+        would be trivially zero for any dataset.
+      </p>
+
+      <p>
+        We can do a lot better than requiring a singleton hypothesis space to
+        ensure the ERM estimation risk
+        <a href="https://w.wiki/HFcb">converges in probability</a> to zero.
+        Formally, we want to investigate the sufficient conditions on the
+        hypothesis space \(H\) such that \(R(\hat{h}) \overset{p}\to R^*(H)\) as
+        \(N \to \infty\) for any \(\hat{h}\) satisfying \(\hat{R}(\hat{h}) =
+        \inf_{h \in H} \hat{R}(h)\).
+      </p>
+
+      <p>
+        To parse through the notation, note that everything with a hat is
+        random. Both the empirical risk \(\hat{R}\) and the ERM hypothesis
+        \(\hat{h}\) are random since they depend on the training dataset which
+        we are treating as random. Conversely, all hatless symbols denote
+        non-random objects.
+      </p>
+
+      <p>
+        Our strategy is to find a random variable \(\hat{Z}\) such that
+        \(R(\hat{h}) - R^*(H) \leq \hat{Z}\), and determine a condition on
+        \(\hat{Z}\) such that it converges in probability to zero. Since \(0
+        \leq R(\hat{h}) - R^*(H)\), the
+        <a href="https://w.wiki/HpTR">squeeze theorem</a> applies, so the
+        estimation risk converges in probability to zero if the upper bound
+        \(\hat{Z}\) does.
+      </p>
+
+      <h3>Bounding the estimation risk</h3>
+      <p>
+        Since the ERM hypothesis is defined through \(\hat{R}\), the following
+        decomposition of the estimation risk is useful: \[ R(\hat{h}) - R^*(H) =
+        \underbrace{\left( R(\hat{h}) - \hat{R}(\hat{h}) \right)}_{(1)} +
+        \underbrace{\left( \hat{R}(\hat{h}) - \hat{R}(h^*) \right)}_{(2)} +
+        \underbrace{\left(\hat{R}(h^*) - R(h^*) \right)}_{(3)}, \] where \(h^*
+        \in H\) is a hypothesis that satisfies \(R(h^*) = R^*(H)\).
+      </p>
+
+      <ol reversed>
+        <li>
+          <p>
+            Let's start with the last term, \(\hat{R}(h^*) - R(h^*)\). This is
+            simply the difference between the sample mean and the expected value
+            of the loss evaluated at a best-in-class hypothesis \(h^*\). Given
+            the iid assumption on the data generation, the standard
+            <a href="https://w.wiki/HpT9">law of large numbers</a> applies, so
+            the term converges in probability to zero.
+          </p>
+        </li>
+        <li>
+          <p>
+            The second term is necessarily non-positive by definition since
+            \(\hat{h}\) minimizes \(\hat{R}\).
+          </p>
+        </li>
+        <li>
+          <p>
+            The first term, \(R(\hat{h}) - \hat{R}(\hat{h})\), is the difference
+            between the true risk and the empirical risk evaluated at an ERM
+            hypothesis \(\hat{h}\). Unlike the third term, the argument
+            \(\hat{h}\) is random rather than fixed, so the "pointwise"
+            convergence of \(\hat{R}\) from the law of large numbers is no
+            longer sufficient. Even as the gap between \(\hat{R}\) and \(R\)
+            shrinks at any given point, the point of evaluation \(\hat{h}\) may
+            sneak away to another point with a larger gap.
+          </p>
+
+          <p>
+            Since \(\hat{h}\) can go anywhere in \(H\), the upper bound strategy
+            requires a blanket guarantee: \[R(\hat{h}) - \hat{R}(\hat{h}) \leq
+            \sup_{h \in H} \left( R(h) - \hat{R}(h) \right).\]
+          </p>
+        </li>
+      </ol>
+
+      <p>
+        In summary, \[ R(\hat{h}) - R^*(H) \leq \sup_{h \in H} \left( R(h) -
+        \hat{R}(h) \right) + \left(\hat{R}(h^*) - R(h^*) \right), \] and since
+        the second summand converges in probability to zero by the law of large
+        numbers, a sufficient<footnote>
+          Vapnik (<a class="cite" href="#ref-vapnik-1995">1995</a>, <a class="cite" href="#ref-vapnik-1998">1998</a>), in what he modestly calls the "key theorem of
+          learning theory," states that the uniform convergence is both
+          sufficient and necessary for <em>strict</em> consistency. Strict
+          consistency, in turn, is a condition stronger than consistency that
+          excludes some trivial cases that arise with (regular) consistency.
+          However, strict consistency also excludes non-trivial cases, as
+          Shalev-Shwartz et al. (<a class="cite" href="#ref-shalev-shwartz-2010">2010</a>) point out: "uniform
+          convergence is a sufficient, but not at all necessary, condition for
+          consistency of empirical minimization in non-trivial settings."
+        </footnote>
+        condition for the ERM estimation risk to converge to zero is that the
+        empirical risk \(\hat{R}\)
+        <a href="https://w.wiki/HpVL">uniformly converges</a> to \(R\): \[
+        \begin{equation}\label{eq:risk_uniform_convergence} \sup_{h \in H}
+        \left( R(h) - \hat{R}(h) \right) \overset{p}{\to} 0. \end{equation} \]
+      </p>
+
+      <p>
+        For example, if \(H\) is finite, then the uniform convergence
+        necessarily holds (\(\hat{h}\) cannot keep running away forever). More
+        broadly, Vapnik and Chervonenkis (<a
+          class="cite"
+          href="#ref-vapnik-1971"
+          >1971</a
+        >) characterize a necessary and sufficient condition for uniform
+        convergence when the output space is binary, \(\mathcal{Y} = \{0, 1\}\),
+        and the risk is measured using absolute loss. In doing so, they
+        introduce a property of hypothesis space, now called the
+        <a href="https://w.wiki/7kq8">VC dimension</a>. Roughly speaking, it is
+        the maximum number of observations for which there is a hypothesis in
+        the space that perfectly fits the dataset for any data generating
+        function \(f^*\). They show the uniform convergence holds if and only if
+        the VC dimension of \(H\) is finite.
+      </p>
+
+      <p>
+        The VC dimension is also useful for characterizing the rate of
+        convergence. The first term of the estimation risk decomposition,
+        \(R(\hat{h}) - \hat{R}(\hat{h})\), is bounded above by a term involving
+        the probability the bound holds, the number of observations, and the VC
+        dimension of the hypothesis space. The bound on the ERM hypothesis risk
+        has been refined in subsequent works,<footnote>
+          Vapnik (<a class="cite" href="#ref-vapnik-1998">1998</a>) provides the following bound: \[ R(\hat{h}) <
+          \hat{R}(\hat{h}) + \frac{\mathcal{E}(N, D, \eta)}{2} \left(1 + \sqrt{1
+          + \frac{4\hat{R}(\hat{h})}{\mathcal{E}(N, D, \eta)}}\right), \] where
+          \[\quad \mathcal{E}(N, D, \eta) := 4 \frac{D(\ln(2N/D) +1) -
+          \ln(\eta/4)}{N},\] \(N\) is the number of observations, \(D\) is the
+          VC dimension of the hypothesis space, and \(\eta\) is the probability
+          the bound fails.
+        </footnote>
+        although taking no assumption on the data drawing distribution forces
+        the worst-case scenario over the whole hypothesis space \(H\). Thus,
+        treating this upper bound as an estimate for the actual risk doesn't
+        seem to be a great idea, as the example below illustrates.
+      </p>
+
+      <div class="example">
+        <h3>Example: Polynomial hypothesis space</h3>
+        <p>
+          If the hypothesis generating function \(h(x; \theta)\) is linear in
+          \(\theta \in \R^S\), then the VC dimension of the hypothesis space is
+          \(S\). Hence, the set of all polynomials degree at most \(d\) has a
+          finite VC dimension of \(d + 1\).
+        </p>
+
+        <p>
+          Let us continue from the previous example where the data generating
+          function is the Runge function over the domain \(\mathcal{X} = [-1,
+          1]\), and the input data are drawn uniformly. We saw that for a small
+          number of observations (\(N = 14\)), the ERM hypothesis from the
+          12-degree polynomial hypothesis space had a relatively large
+          estimation risk.
+        </p>
+
+        <p>
+          <a href="#fig-runge-convergence" class="fig-ref"></a> shows what
+          happens as the number of observations grow for one particular path of
+          sample draws. The horizontal axis indicates the number of
+          observations, while the vertical axis shows the square loss risk on a
+          log scale. The solid line shows the risk of the ERM hypothesis,
+          \(R(\hat{h})\). As expected, it converges to the approximation risk
+          \(R^*(H)\).
+        </p>
+
+        <div
+          class="plotly-figure"
+          id="fig-runge-convergence"
+          data-src="figures/runge_convergence.json"
+          data-caption="Convergence of ERM risks"
+        ></div>
+
+        <p>
+          The figure also shows the empirical risk \(\hat{R}(\hat{h})\) in a
+          dashed line, which starts from near-zero but converges toward
+          \(R^*(H)\). Again, since \(H\) has finite VC dimension, the uniform
+          convergence holds, so we expect this convergence.
+        </p>
+
+        <p>
+          Finally, the dash-dot line shows Vapnik's upper bound on the risk that
+          would hold with 95% probability. The bound is much higher (recall the
+          vertical axis is on the log scale) than the actual risk as it guards
+          against the worst-case data generating process scenario. In this
+          example, the bound's rate of convergence is also much slower than the
+          actual risk's.
+        </p>
+      </div>
+      <!-- #endregion -->
+
+      <!-- #region Simple perceptron -->
+      <h1 id="simple-perceptron">Simple perceptron</h1>
+      <p>
+        In this section, I present a "textbook" perceptron, a version of
+        Rosenblatt's perceptron simplified for pedagogy. It is defined for the
+        binary outcome space, \(\mathcal{Y} = \{0, 1\}\), and a real vector
+        input space, \(\mathcal{X} = \R^K\).
+      </p>
+
+      <h2>Linear threshold hypothesis generating function</h2>
+      <p>
+        The hypothesis space is specified parametrically, generated by a
+        <dfn>linear threshold function</dfn>: \[\begin{equation}\label{eq:ltf}
+        h(x_i, \theta) = \mathbf{1}( \theta \cdot \tilde{x}_i > 0),
+        \end{equation}\] where
+      </p>
+      <ul>
+        <li>\(\mathbf{1}\) is the indicator function,</li>
+        <li>\(\tilde{x}_i = (1, x_{i,1}, \dots, x_{i,K})\), and</li>
+        <li>\(\theta \in \R^{1+K}\).</li>
+      </ul>
+
+      <h3>Bias, weight, threshold, score</h3>
+      <p>
+        It is useful to introduce some additional terminology. Given the
+        parameter \(\theta = (\theta_0, \theta_1, \dots, \theta_K)\), let
+        \(b := \theta_0\) and \(w := (\theta_1, \dots, \theta_K)\). Then
+        \[\theta \cdot \tilde{x}_i = b + w \cdot x_i.\] The constant term
+        \(b\) is called the <dfn>bias</dfn> (not to be confused with the
+        <a href="https://w.wiki/HPWL">bias of an estimator</a>), and the other
+        coefficients \(w\) are called the weights.
+      </p>
+
+      <p>
+        If the inequality is written as \(\theta \cdot \tilde{x}_i > 0\), as in
+        \(\eqref{eq:ltf}\), then \(\theta \cdot \tilde{x}_i = b + w \cdot x_i\)
+        is called the <dfn>score</dfn> (not to be confused with the
+        <a href="https://w.wiki/xE2">F-score</a>). But if the same inequality is
+        written as \(w \cdot x_i > -b\), then \(w \cdot x_i\) is called the
+        score and \(-b\) the threshold. To avoid confusion, I will call \(\theta
+        \cdot \tilde{x}_i\) the affine score and \(w \cdot x_{i}\) the linear
+        score.
+      </p>
+
+      <h3>Parameters and hypotheses</h3>
+      <p>
+        The mapping \(\theta \mapsto h_\theta\) is not injective here. Indeed,
+        if \(c > 0\) is some positive scalar, then \(h_\theta = h_{c \theta}\)
+        for any \(\theta \in \R^{1+K}\). Fancily, we could say \(h(x_i,
+        \theta)\) is
+        <a href="https://w.wiki/HPV3">positive homogeneous of degree zero</a> in
+        \(\theta\) to mean the same.
+      </p>
+
+      <p>
+        The converse is almost true. If \(\theta \neq 0\) and \(h_\theta =
+        h_{\theta'}\), then \(\theta' = c \theta\) for some \(c > 0\). If
+        \(\theta = 0\), then \(h_\theta(x) = 0\) for all \(x \in \R^K\). So
+        \(h_\theta = h_{\theta'}\) where \(\theta' = (b, 0, \dots, 0)\) for some
+        \(b < 0\). But \(\theta \neq c \theta'\) for any \(c > 0\).
+      </p>
+
+      <p>
+        In this note, I will say a parameter \(\theta\) is associated with a
+        hypothesis \(h^*\) if \(h^* = h_\theta\), i.e. \(h^*(x) = h(x; \theta)\)
+        for all \(x \in \mathcal{X}\).
+      </p>
+
+      <h3>Error under linear threshold</h3>
+      <p>
+        Lastly, the error term under the linear threshold hypothesis
+        \(\theta\) is \[ e_i(\theta) := y_i - h(x_i, \theta) = \begin{cases} 1 &\text{if \(y_i
+        = 1\) and \(\theta \cdot \tilde{x}_i \leq 0\)}, \\ -1 &\text{if \(y_i =
+        0\) and \(\theta \cdot \tilde{x}_i > 0\)}, \\ 0 &\text{otherwise}.
+        \end{cases} \]
+      </p>
+
+      <h2>Rosenblatt learning algorithm</h2>
+      <p>
+        To find \(\theta\) that fits the given dataset, Rosenblatt (<a
+          class="cite"
+          href="#ref-rosenblatt-1958"
+          >1958</a
+        >) proposes several variants of the algorithm sharing the following
+        heuristics.
+      </p>
+
+      <h3>Error correction</h3>
+      <p>
+        The algorithm starts with an arbitrary guess of the hypothesis
+        \(\theta_0 \in \R^{1+K}\) and updates it after examining each
+        observation.
+      </p>
+
+      <ol>
+        <li>
+          <strong>Correct prediction.</strong>
+          If \(e_i(\theta) = 0\), then the prediction is correct and there is no
+          need to adjust \(\theta\).
+        </li>
+        <li>
+          <strong>False negative.</strong>
+          If \(e_i(\theta) = 1\), then \(y_i = 1\) and \(\theta \cdot
+          \tilde{x}_i \leq 0\). To correct the error, we want to increase the
+          value of \({\theta \cdot \tilde{x}_i}\), which we can achieve by
+          incrementally moving \(\theta\) in the direction of the gradient
+          \(\nabla (\theta \cdot \tilde{x}_i) = \tilde{x}_i\).
+        </li>
+        <li>
+          <strong>False positive.</strong>
+          Lastly, if \(e_i(\theta) = -1\), then we want to decrease \(\theta
+          \cdot \tilde{x}_i\), which can be achieved by moving \(\theta\) in the
+          opposite direction of the gradient, \(-\tilde{x}_i\).
+        </li>
+      </ol>
+
+      <p>
+        Conveniently, in all three cases, we want to update \(\theta\) in the
+        direction of \(e_i(\theta) \tilde{x}_i\).
+      </p>
+
+      <h3>Selection mechanism</h3>
+      <p>
+        Repeated over the observations (each observation can be visited more than
+        once), these updates result in a sequence of hypothesis parameters
+        \((\theta_0, \theta_1, \dots)\). The learning algorithm outputs a
+        parameter based on this sequence. If the sequence converges, then the
+        limit provides a natural candidate. (See the
+        <a href="#convergence-theorem">&sect;convergence theorem</a> below.)
+      </p>
+
+      <p>
+        In practice, the algorithm makes a predetermined number of updates and
+        derives the parameter from the list \((\theta_0, \dots, \theta_T)\). One
+        could simply choose the last parameter \(\theta_T\), or the one that
+        minimizes the training dataset error rate. A more sophisticated
+        selection mechanism, such as the voted perceptron proposed by Freund
+        and Schapire (<a class="cite" href="#ref-freund-1999">1999</a>),
+        takes a weighted average of the parameters in the sequence.
+      </p>
+
+      <h3>Batch learning</h3>
+      <p>
+        Instead of updating the hypothesis after each observation, the algorithm
+        could update on a set of observations. That is, given any subset of
+        observations \(B \subseteq \{1, \dots, N\}\), the algorithm adjusts the
+        current candidate in the direction of \(\sum_{i \in B} e_i(\theta)
+        \tilde{x}_i\). If \(B = \{1, \dots, N\}\), then this sum can be
+        succinctly expressed as \(\tilde{X}^\mathsf{T} e(\theta) \), where
+        \(\tilde{X}\) is an \(N \times (1 + K)\) matrix whose \(i\)th row is
+        \(\tilde{x}_i\), and \(e(\theta)\) is an \(N\) vector whose \(i\)th
+        coordinate is \(e_i(\theta)\).
+      </p>
+
+      <p>Below is one concrete version of the Rosenblatt algorithm.</p>
+
+      <ol class="pseudocode">
+        <li>
+          Given
+          <ul>
+            <li>a dataset \((X, y)\),</li>
+          </ul>
+        </li>
+        <li>
+          Choose
+          <ul>
+            <li>
+              the initial parameter \(\theta_0 \in \R^{1+K}\), such as
+              \(\theta_0 = 0\),
+            </li>
+            <li>the learning rate scalar \( \eta > 0 \), and</li>
+            <li>the length of the sequence \(T > 0\).</li>
+          </ul>
+        </li>
+        <li>
+          Recursively define a sequence \( (\theta_1, \theta_2, \dots) \): \[
+          \theta_{t+1} := \theta_t + \eta \tilde{X}^\mathsf{T} e(\theta_t). \]
+        </li>
+        <li>Return \(\theta_T\).</li>
+      </ol>
+
+      <h2 id="convergence-theorem">Convergence of Rosenblatt algorithm</h2>
+      <h3>Linearly separable datasets</h3>
+      <p>
+        Suppose \(\mathcal{Y} = \{0, 1\}\) and \(\mathcal{X} \subseteq \R^K\).
+        We say a dataset \( (X, y) \in \mathcal{X}^N \times \mathcal{Y}^N \) is
+        <dfn>linearly separable</dfn> if there exists some \(\theta^* \in
+        \R^{1+K}\) such that \( y_i = h(x_i, \theta^*) \) for all \(i = 1,
+        \dots, N\), where \(h\) is the linear threshold function
+        \(\eqref{eq:ltf}\).
+      </p>
+
+      <p>
+        Note that this does not imply the data generating function is the same
+        linear threshold function, \(f^* = h_{\theta^*}\) for two reasons. One
+        is due to sampling. Even if the data generating function is not a linear
+        threshold function, the dataset generated by it can still be linearly
+        separable. Indeed, if \(N = 2\), then the dataset is linearly separable
+        regardless of its data generating function.
+      </p>
+
+      <p>
+        Another reason is that even if \(f^*\) is a linear threshold function,
+        its parameter need not be \(\theta^*\). In fact, with finitely many
+        observations, there is always some "wiggle room" around the separating
+        hyperplane, so a linearly separable dataset is separable by infinitely
+        many \(\theta\)s.<footnote>
+          The result follows from the hyperplane separation theorem. The set \(
+          \{x_i \in X : y_i = 1\} \) is finite, so its convex hull is compact,
+          and so is the convex hull of \( \{x_i \in X : y_i = 0\} \). If the
+          dataset is linearly separable, then these two convex hulls are
+          disjoint. Combined with their compactness, the separation is strict.
+        </footnote>
+        In other words, if \(y_i = h(x_i, \theta^*)\) for all \(i\), then there
+        exists \(\theta' \neq \theta^*\) such that \(y_i = h(x_i, \theta')\) for
+        all \(i\).
+        <a href="#fig-svm-induction" class="fig-ref"></a> illustrates a linearly
+        separable dataset with two different consistent hypotheses.
+      </p>
+
+      <h3>Perceptron convergence theorem</h3>
+      <p>
+        The perceptron convergence theorem states that on a linearly separable
+        dataset, the Rosenblatt algorithm converges in finitely many steps to
+        some consistent hypothesis \(\theta'\).<footnote>
+          See, for example, Block (<a class="cite" href="#ref-block-1962"
+            >1962</a
+          >), Novikoff (<a class="cite" href="#ref-novikoff-1962">1962</a>),
+          and Minsky and Papert (<a class="cite" href="#ref-minsky-1969">1969</a
+          >).
+        </footnote>
+        More precisely, for any choices of \(\theta_0\) and \(\eta\), the
+        sequence \((\theta_t)\) produced by the algorithm satisfies \(\theta_T =
+        \theta'\) for some finite \(T\). Note that under \(\theta'\), all data
+        points are correctly classified, so \( e(\theta_T) = 0 \). This in turn
+        implies \(\theta_{T+1} = \theta_T\), so the sequence converges to
+        \(\theta_T = \theta'\).
+      </p>
+
+      <h3>Converse</h3>
+      <p>
+        The converse of the convergence theorem also holds. If the dataset is
+        not linearly separable (which implies \(f^*\) is not a linear threshold
+        function), then the error vector \(e(\theta)\) is never zero for any
+        \(\theta\), so it always gets updated. Since there are finitely many
+        possible values for the adjustment \(\tilde{X}^\mathsf{T} e(\theta)\),
+        the algorithm does not converge.
+      </p>
+
+      <h2>Rosenblatt algorithm as ERM</h2>
+      <p>
+        We can view the Rosenblatt algorithm as minimizing a type of empirical
+        risk, an average of weighted errors, and therefore as following the
+        principle of ERM. This framing helps to better understand the algorithm.
+      </p>
+
+      <h3>Slack</h3>
+      <p>
+        To motivate the weight, fix a dataset \((X, y)\) and a parameter
+        \(\theta\). For an observation \(i\), consider the "slack"
+        \(\xi_i(\theta)\) required on the threshold so that the score lies on
+        the correct side of the slacked threshold.
+      </p>
+      <ul>
+        <li>
+          If the observation is already correctly labeled, i.e. if \(e_i(\theta)
+          = 0\), then there is no need for any slack, so \(\xi_i(\theta) = 0\).
+        </li>
+        <li>
+          If \(y_i = 0\) but \(\theta \cdot \tilde{x}_i > 0\), so that
+          \(e_i(\theta) = -1\), then we need to raise the threshold so that
+          \(\theta \cdot \tilde{x}_i \leq s\) for some \(s\). The minimum \(s\)
+          such that the inequality holds is \(\xi_i(\theta) = \theta \cdot
+          \tilde{x}_i\).
+        </li>
+        <li>
+          If \(y_i = 1\) but \(\theta \cdot \tilde{x}_i \leq 0\), so that
+          \(e_i(\theta) = 1\), then we want the minimum \(s\) such that \(\theta
+          \cdot \tilde{x}_i > -s\). Since the minimum does not exist with the
+          strict inequality, however, we use the infimum, or equivalently, use
+          weak inequality: \(-\theta \cdot \tilde{x}_i \leq s\). This gives us
+          \(\xi_i(\theta) = -\theta \cdot \tilde{x}_i\).
+        </li>
+      </ul>
+
+      <p>
+        We can combine all three cases and write the slack succinctly as
+        \[\xi_i(\theta) := (-\theta \cdot \tilde{x}_i) e_i(\theta). \]
+      </p>
+
+      <p>
+        An alternative expression for the slack uses positive and negative
+        output labels instead of one and zero. To this end, define \[
+        \tilde{y}_i := 2 y_i - 1 \in \{-1, 1\}. \] Then the slack inequality for
+        either output value is \(s \geq \tilde{y}_i (-\theta \cdot
+        \tilde{x}_i)\). Since the slack is by definition non-negative, \[
+        \xi_i(\theta) = \max\{0, -\tilde{y}_i (\theta \cdot \tilde{x}_i)\}. \]
+      </p>
+
+      <h3>Perceptron criterion</h3>
+      <p>
+        The Rosenblatt algorithm is a
+        <a href="https://w.wiki/HYTw">subgradient method</a> that minimizes the
+        average slack, or what Bishop (<a class="cite" href="#ref-bishop-1995"
+          >1995</a
+        >) calls the <dfn>perceptron criterion</dfn>:
+        \[\begin{equation}\label{eq:perceptron_criterion} \bar{\xi}(\theta) :=
+        \frac{1}{N} \sum_{i=1}^N \xi_i(\theta) = \frac{1}{N} \sum_{i=1}^N
+        (-\theta \cdot \tilde{x}_i) e_i(\theta). \end{equation}\]
+      </p>
+
+      <p>
+        Viewed as a risk, the perceptron criterion's "loss" function is the
+        weighted error \(L(x; \theta) = (-\theta \cdot \tilde{x}) \epsilon(x;
+        \theta)\). Note \(L(x; \theta) \geq 0\) with equality when \(\epsilon(x;
+        \theta) = 0\). Still, it is not a proper loss as I have defined it since
+        the weight depends on the parameter value \(\theta\). Consequently, we
+        cannot compare the performance of Rosenblatt algorithm using this risk
+        to the performance of an algorithm under a different hypothesis space.
+        Nonetheless, since it plays the role of a loss function in empirical
+        risk minimization, it is sometimes called a surrogate loss function.
+      </p>
+
+      <p>
+        The key advantage of using a surrogate rather than the proper loss is
+        that it provides a nicer objective function: the average slack is
+        continuous and convex, unlike the average error.<footnote>
+          Even though the error \(e_i(\theta) = y_i - h(x_i, \theta)\) by itself
+          is discontinuous, the product \( (\theta \cdot \tilde{x}) h(x, \theta)
+          = (\theta \cdot \tilde{x}) \ind(\theta \cdot \tilde{x} > 0) = \max\{0,
+          \theta \cdot \tilde{x}\} \) is both continuous and convex in
+          \(\theta\), and so is the empirical risk \( N\hat{R}(\theta) =
+          \sum_{i=1}^N \max\{0, \theta \cdot \tilde{x}_i\} - \sum_{i=1}^N
+          (\theta \cdot \tilde{x}_i) y_i\).
+        </footnote>
+      </p>
+
+      <p>
+        Except at the points \(\theta \in \R^{1+K}\) such that \(\theta \cdot
+        \tilde{x}_i = 0\) for some \(i\), the gradient of \(\bar{\xi}\) exists
+        and is easily computed as \[\nabla \bar{\xi}(\theta) = -\frac{1}{N}
+        \tilde{X}^\mathsf{T} e(\theta).\] One can also show that at any
+        non-differentiable point \(\theta_0\), \(\nabla \bar{\xi}(\theta_0)\) is
+        a <a href="https://w.wiki/HKvb">subgradient</a>.<footnote>
+          Note \(\bar{\xi}(\theta) - \bar{\xi}(\theta_0) = N^{-1} \sum_{i=1}^N
+          (-\theta \cdot \tilde{x}_i) e_i(\theta) - N^{-1} \sum_{i=1}^N
+          (-\theta_0 \cdot \tilde{x}_i) e_i(\theta_0) \), and
+          \(\nabla\bar{\xi}(\theta_0) \cdot (\theta - \theta_0) =
+          N^{-1}\sum_{i=1}^N (-\theta \cdot \tilde{x}_i) e_i(\theta_0) - N^{-1}
+          \sum_{i=1}^N (-\theta_0 \cdot \tilde{x}_i) e_i(\theta_0)\). So
+          \(\bar{\xi}(\theta) - \bar{\xi}(\theta_0) \geq
+          \nabla\bar{\xi}(\theta_0) \cdot (\theta - \theta_0) \) if and only if
+          \(\sum_{i=1}^N (-\theta \cdot \tilde{x}_i) e_i(\theta) \geq
+          \sum_{i=1}^N (-\theta \cdot \tilde{x}_i) e_i(\theta_0) \). Consider
+          the maximization problem \( \max_{t \in \R^{1+K}} \, \sum_{i=1}^N
+          (-\theta \cdot \tilde{x}_i) e_i(t) \) where, recall, \(e_i(t) = y_i -
+          \ind(t \cdot \tilde{x}_i > 0)\). When \(-\theta \cdot \tilde{x}_i >
+          0\), we want \(e_i(t)\) to be large, achieved when \(t \cdot
+          \tilde{x}_i \leq 0\), and when \(-\theta \cdot \tilde{x}_i < 0\), we
+          want \(t \cdot \tilde{x}_i > 0\). Clearly, this is achieved with \(t =
+          \theta\). So the desired inequality holds for any \(\theta\) and
+          \(\theta_0\), proving \(\nabla \bar{\xi}(\theta)\) is indeed a
+          subgradient of \(\bar{\xi}(\theta)\) at any \(\theta\).
+        </footnote>
+        Therefore, the Rosenblatt algorithm is the subgradient method (with a
+        constant step size) that applied to the perceptron criterion.
+      </p>
+
+      <h2>Hinge loss</h2>
+      <h3>Problem of slack</h3>
+      <p>
+        At a first glance, the perceptron criterion
+        \(\eqref{eq:perceptron_criterion}\) appears to be a reasonable proxy for
+        the empirical risk. However, the perceptron criterion suffers a
+        technical flaw as an objective function: it is minimized at \(\theta =
+        0\) for any dataset.
+      </p>
+
+      <p>
+        This property is harmless when the dataset is linearly separable. If we
+        use \(\nabla \bar{\xi}(\theta) = -N^{-1} \tilde{X}^\mathsf{T}
+        e(\theta)\) as the subgradient, then \(\nabla \bar{\xi}(0) \neq 0\)
+        unless \(\theta = 0\) is a consistent hypothesis. So the subgradient
+        method converges to a consistent hypothesis by the convergence theorem.
+        When the dataset is not linearly separable, however, \(\theta = 0\) is
+        the <em>unique</em> minimum, so the minimization problem is ill-posed.
+      </p>
+
+      <p>
+        More fundamentally, the definition of slack is ill-suited for
+        minimization. First, note that two different parameters associated with
+        the same hypothesis have different average slacks. Recall that
+        \(\theta\) and \(c \theta\) represent the same hypothesis if \(c > 0\),
+        but \(\bar{\xi}(\theta) \neq \bar{\xi}(c \theta) = c
+        \bar{\xi}(\theta)\).
+      </p>
+
+      <p>
+        This isn't necessarily a problem per se. Since we are choosing the
+        hypothesis by minimizing \(\bar{\xi}(\theta)\), each hypothesis is
+        essentially represented by, among all the parameters associated with it,
+        the one with the minimum average slack. But if the dataset is not
+        linearly separable so that \(\bar{\xi}(\theta) > 0\) for any \(\theta\),
+        then \(\min_{c > 0} \bar{\xi}(c \theta)\) does not exist since
+        \(\bar{\xi}(c \theta) \to 0\) as \(c \to 0\). So under the minimum
+        average slack criterion, each hypothesis lacks a representative
+        parameter.
+      </p>
+
+      <h3>Robust slack</h3>
+      <p>
+        To fix the issue, instead of having \(\theta = 0\) always appear to be
+        correct, we will have it always erroneous. More precisely, for some
+        positive number \(\delta > 0\), we require \(\theta \cdot \tilde{x}_i
+        \geq \delta\) when \(y_i = 1\) and \(\theta \cdot \tilde{x}_i \leq
+        -\delta\) when \(y_i = 0\) for the classification to be considered
+        correct. This leads to a "robust" error
+        \[\begin{equation}\label{eq:robust_error} \tilde{e}_i(\theta; \delta) :=
+        \begin{cases} 1 & \text{if \(y_i = 1\) and \(\theta \cdot \tilde{x}_i <
+        \delta\)}, \\ -1 & \text{if \(y_i = 0\) and \(\theta \cdot \tilde{x}_i >
+        -\delta\)}, \\ 0 & \text{otherwise}, \end{cases} \end{equation} \] or,
+        using \(\tilde{y}_i\) notation, \(\tilde{e}_i(\theta; \delta) =
+        \tilde{y}_i \ind(\delta - \tilde{y}_i(\theta \cdot \tilde{x}_i) > 0)\).
+        This robust error is always nonzero if \(\theta \cdot \tilde{x}_i \in
+        (-\delta, \delta)\), and in particular, \(\tilde{e}_i(0; \delta) \neq
+        0\).
+      </p>
+
+      <p>
+        The corresponding "robust" slack is \[ \tilde{\xi}_i(\theta; \delta) =
+        \left( \delta \tilde{y}_i - \theta \cdot \tilde{x}_i \right)
+        \tilde{e}_i(\theta; \delta) = \max\{0, \delta - \tilde{y}_i (\theta
+        \cdot \tilde{x}_i)\}. \] Note \(\tilde{\xi}_i(\theta; 0) =
+        \xi_i(\theta)\), so this version generalizes the previous one.
+      </p>
+
+      <div
+        class="plotly-figure"
+        id="fig-hinge-scalr"
+        data-src="figures/hinge.json"
+        data-caption="Plot of \(f(x) = \max\{0, \delta - x\}\)"
+      ></div>
+
+      <p>
+        <a href="#fig-hinge-scalr" class="fig-ref"></a> plots the robust slack
+        \(\tilde{\xi}\) against the signed score \(\tilde{y}_i (\theta \cdot
+        \tilde{x}_i)\), i.e. the function \(f(x) = \max\{0, \delta - x\}\).
+      </p>
+
+      <h3>Minimizing the average robust slack</h3>
+      <p>
+        Finally, we can consider minimizing the average of robust slack,
+        \[\begin{equation}\label{eq:average_slack}\bar{\xi}(\theta; \delta) :=
+        \frac{1}{N} \sum_{i=1}^N \tilde\xi_i(\theta; \delta).\end{equation}\]
+        The corresponding surrogate loss with \(\delta > 0\) is called the
+        <dfn>hinge loss</dfn>. It retains convexity and so is amenable to
+        subgradient method, with \(\nabla \bar{\xi}(\theta; \delta) = -N^{-1}
+        \tilde{X}^\mathsf{T}\tilde{e}(\theta; \delta)\) constituting a
+        subgradient.<footnote>
+          Since \(\nabla\bar{\xi}(\theta; 0) \neq \nabla\bar{\xi}(\theta)\) at
+          non-differentiable points, they choose different subgradients from the
+          subdifferential.
+        </footnote>
+      </p>
+
+      <p>
+        It also retains the convergence property. If the dataset is linearly
+        separable, then the subgradient method converges to a consistent
+        hypothesis, although not to a "borderline" one where \(\theta \cdot
+        \tilde{x_i} = 0\) for at least one observation. Note that the value of
+        \(\delta\), as long as positive, has no bearing. If a consistent
+        hypothesis \(\theta\) is "interior," so that \(\theta \cdot \tilde{x}_i
+        \neq 0\) for all observations but \(\tilde{e}_i(\theta; \delta) \neq
+        0\), then regardless of the value of \(\delta\), we can find \(c > 1\)
+        such that \(\tilde{e}_i(c \theta; \delta) = 0\).
+      </p>
+
+      <p>
+        Importantly, our initial grievance with the perceptron criterion is
+        resolved: \(\bar{\xi}(0; \delta) = \delta > 0\). Recall that under the
+        perceptron criterion, \(\bar{\xi}(c \theta; 0) = c \bar{\xi}(\theta;
+        0)\), so the minimizing parameter vanishes to zero.
+      </p>
+
+      <p>
+        With \(\delta > 0\), the linearity no longer holds. However, \(f(c) :=
+        \bar{\xi}(c \theta; \delta)\) as a function of \(c\) is continuous and
+        convex since each summand \(\tilde{\xi}_i(c\theta; \delta)\) is.
+        Furthermore, \(f(0) = \delta\) and \(\lim_{c \to \infty} f(c) = \infty\)
+        if at least one observation is misclassified. So if \(\inf_c f(c) <
+        \delta\), then \(f(c)\) achieves the minimum at some \(c^* \in (0,
+        \infty)\). <a href="#fig-hinge-scalar" class="fig-ref"></a> plots this
+        function \(f\) for the perceptron criterion, \(\delta = 0\), and the
+        robust average slack, \(\delta > 0\). In short, a relevant hypothesis
+        has a representative parameter under the robust slack.
+      </p>
+
+      <div
+        class="plotly-figure"
+        id="fig-hinge-scalar"
+        data-src="figures/hinge_scalar.json"
+        data-caption="Robust slack admits a representative parameter of a hypothesis"
+      ></div>
+
+      <p>
+        The value of \(\delta\) determines which of the associated parameters is
+        representative, but we don't care about the choice of the parameter as
+        long as there is one. As such, typically the value of \(\delta\) is
+        fixed to unity \(\delta = 1\).
+      </p>
+
+      <!-- #endregion -->
+
+      <!-- #region SVM -->
+      <h1>Support vector machine</h1>
+      <p>
+        The Rosenblatt algorithm finds a consistent linear threshold hypothesis
+        when one exists and, with some technical modification, finds a
+        hypothesis with a "good fit" when one does not. It is completely silent,
+        however, on which hypothesis to choose when there are multiple
+        consistent hypotheses. In short, it lacks an inductive bias.
+      </p>
+
+      <div
+        class="plotly-figure"
+        id="fig-svm-induction"
+        data-src="figures/svm_induction.json"
+        data-caption="Two hypotheses for linearly separable datasets"
+      ></div>
+
+      <p>
+        To make the discussion concrete,
+        <a href="#fig-svm-induction" class="fig-ref"></a> shows a dataset with
+        input space \(\mathcal{X} = [-1, 1]^2\) and data-generating function
+        \(f^*(x) = \ind(\theta^* \cdot \tilde{x} > 0)\) for some \(\theta^*\).
+        The figure also depicts two hypotheses. Each hypothesis \(\theta\) is
+        represented by the line corresponding to \(\theta \cdot \tilde{x} = 0\),
+        with the correct orientation so that it is consistent with the dataset.
+      </p>
+
+      <p>
+        The situation here is very much like the one in
+        <a href="#fig-complexity" class="fig-ref"></a>. Although both hypotheses
+        are consistent, hypothesis A is intuitively more appealing than
+        hypothesis B. Duda et al. (<a
+          class="cite"
+          href="#ref-duda-2000"
+          >2000</a
+        >) argue that the appeal of hypothesis A, which sits "closer to the
+        middle of the solution region," lies in our "natural belief" that it is
+        "more likely to classify new test samples correctly."
+      </p>
+
+      <p>
+        In this section, I define the margin to make the notion of wiggle room
+        more precise. I then introduce a learning algorithm, the support vector
+        machine (SVM), that selects the hypothesis that sits in the middle of
+        the widest possible wiggle room. Lastly, I briefly discuss how this
+        "natural belief" might be justified.
+      </p>
+
+      <h2>Margin</h2>
+      <p>
+        We want to be more precise about what it means for a separating
+        hyperplane to lie in the middle of the wiggle room. We continue with the
+        setting \(\mathcal{X} = \R^K\) and \(\mathcal{Y} = \{0, 1\}\).
+      </p>
+
+      <p>
+        Let \(\theta = (\theta_0, \dots, \theta_K)\) be a parameter vector with
+        bias \(b_\theta := \theta_0\) and nonzero linear score \(w_\theta :=
+        (\theta_1, \dots, \theta_K) \neq 0\). Denote the hyperplane
+        corresponding to \(\theta\) as \[ \ell(\theta) := \{x \in \R^K : \theta
+        \cdot \tilde{x} = b_\theta + w_\theta \cdot x = 0\}. \]
+      </p>
+
+      <p>
+        Given a dataset \((X, y)\), define the <dfn>margin</dfn> of \(\theta\)
+        as the <a href="https://w.wiki/8KQq">distance</a> between the hyperplane
+        \(\ell(\theta)\) and the closest input observation: \[ \min_i
+        \frac{|b_\theta + w_\theta \cdot x_i|}{\lVert w_\theta \rVert} = \min_i
+        \frac{|\theta \cdot \tilde{x}_i|}{\lVert w_\theta \rVert}, \] and call
+        \(x_i\) a <dfn>support vector</dfn> if \(i\) attains this minimum. Since
+        this quantity is homogeneous of degree zero, parameter vectors
+        representing the same hyperplane have the same margin.
+      </p>
+
+      <h2>Hard margin</h2>
+      <p>
+        Our motivation was to have a selection criterion when there are multiple
+        consistent hypotheses, so let's suppose the dataset is linearly
+        separable. Our inductive bias prefers a hypothesis with a larger margin,
+        so the learning algorithm chooses the hypothesis with the largest margin
+        amongst all the consistent ones: \[\begin{align*} \max_{\theta \in
+        \R^{1+K}} \quad &\lVert w_\theta \rVert^{-1} \left(\min_{x_i \in X} \;
+        |\theta \cdot \tilde{x}_i| \right) \\ \text{s.t.} \quad &e_i(\theta) = 0
+        \text{ for all \(i=1,\dots,N\)}. \end{align*} \] This learning algorithm
+        is called the hard margin SVM because it imposes the hard constraint of
+        no slack.
+      </p>
+
+      <p>
+        The problem can be simplified with some normalization. Denote \(\delta
+        := \min_{x_i \in X} \; |\theta \cdot \tilde{x}_i|\). The hyperplane with
+        the maximal margin will have a positive margin (by the "wiggle room"
+        argument), so \(\delta > 0\). Asking the absolute affine score to be at
+        least \(\delta > 0\) is precisely what we did for the robust error
+        \(\eqref{eq:robust_error}\). That is, \(|\theta \cdot \tilde{x}_i| \geq
+        \delta\) together with \(e_i(\theta) = 0\) translate to
+        \(\tilde{e}_i(\theta; \delta) = 0\).
+      </p>
+
+      <p>
+        So, the margin maximization can be written as
+        \[\begin{equation}\label{eq:svm_hard}\begin{aligned} \min_{\theta \in
+        \R^{1+K}} \quad &\frac{1}{2}\lVert w_\theta \rVert^2 \\ \text{s.t.}
+        \quad &\tilde{e}_i(\theta; \delta) = 0 \text{ for all \(i=1,\dots,N\)}.
+        \end{aligned} \end{equation}\] Here we recognized that maximizing
+        \(\lVert w_\theta \rVert^{-1}\) is equivalent to minimizing
+        \(\frac{1}{2} \lVert w_\theta \rVert^{2}\), where the squaring and
+        halving are applied purely for the cleaner gradient expression.
+        Recalling \(\tilde{e}_i(\theta; \delta) = \tilde{y}_i \ind(\delta -
+        \tilde{y}_i(\theta \cdot \tilde{x}_i) > 0)\), the condition
+        \(\tilde{e}_i(\theta; \delta) = 0\) is equivalent to
+        \(\tilde{y}_i(\theta \cdot \tilde{x}_i) \geq \delta \). Again, the value
+        of \(\delta\) determines the "representative" parameter of the
+        hypothesis and is often fixed to \(\delta = 1\).
+      </p>
+
+      <h2>Soft margin</h2>
+      <p>
+        The "hard" constraint of the minimization problem \eqref{eq:svm_hard}
+        can be satisfied if and only if the dataset is linearly separable. What
+        if the dataset is not linearly separable? We've already seen that we can
+        instead look for the hypothesis that minimizes the average slack.
+      </p>
+
+      <p>
+        But now we have two competing criteria for hypothesis selection: how
+        well the hypothesis fits the data, measured by the average slack
+        \(\eqref{eq:average_slack}\), and how well it fits the inductive bias,
+        measured by the margin.
+      </p>
+
+      <p>
+        A simple solution is to minimize the weighted sum of each, yielding the
+        following optimization problem: \[\begin{equation}\label{eq:svm}
+        \min_{\theta \in \R^{1+K}} \; \bar{\xi}(\theta; \delta) + \lambda
+        \frac{1}{2} \lVert w_\theta \rVert^2, \end{equation} \] where \(\lambda
+        \geq 0\) determines how much we care about maximizing the margin over
+        the data fit. A learning algorithm that chooses the argument of the
+        minimum of \(\eqref{eq:svm}\) is called the (soft margin)
+        <dfn>support vector machine (SVM)</dfn>.
+      </p>
+
+      <p>
+        Since the objective function \(f(\theta) := \bar{\xi}(\theta; \delta) +
+        \lambda \frac{1}{2} \lVert w_\theta \rVert^2\) is convex, a subgradient
+        method remains a suitable optimization strategy (Shalev-Shwartz et al.,
+        <a class="cite" href="#ref-shalev-shwartz-2011">2011</a>). From our
+        earlier derivations with the hinge loss, we can characterize a
+        subgradient as \[\begin{align*} \nabla_{w_\theta} f(\theta) &=
+        -\frac{1}{N} X^\mathsf{T} \tilde{e}(\theta; \delta) + \lambda w_\theta,
+        \\ \pdv{f(\theta)}{b_\theta} &= -\frac{1}{N} \sum_{i=1}^N
+        \tilde{e}_i(\theta; \delta). \end{align*}\]
+      </p>
+
+      <p>
+        A lower value of \(\lambda\) corresponds to higher emphasis on
+        data-fitting, with the algorithm reducing to the (corrected) Rosenblatt
+        when \(\lambda = 0\). A typical explanation goes: When \(\lambda\) is
+        too low, the algorithm "overfits" to the given (training) dataset.
+        Conversely, when \(\lambda\) is too high, it "underfits" the dataset. So
+        there is a Goldilocks \(\lambda\) that balances the data-fitting and the
+        inductive bias to minimize the true risk. Finding the right \(\lambda\)
+        itself poses an
+        <a href="https://w.wiki/87EV">optimization problem</a>.
+      </p>
+
+      <div
+        class="plotly-figure"
+        id="fig-svm-lambda"
+        data-src="figures/svm_lambda.json"
+        data-caption="Training error rate for different values of \(\lambda\)"
+      ></div>
+
+      <p>
+        To see if the story holds, I used the MNIST dataset, keeping only the
+        observations labeled either 4 or 9, and used the SVM with different
+        \(\lambda\) values to classify them.
+        <a href="#fig-svm-lambda" class="fig-ref"></a> illustrates the test
+        dataset error rate of the estimated parameter under different values of
+        \(\lambda\).<footnote>
+          To simplify the implementation, I excluded the bias term, in effect
+          imposing the constraint \(b_\theta = 0\).
+        </footnote>
+        The clear U-shaped pattern corroborates the story that \(\lambda\)
+        balances between overfitting and underfitting.
+      </p>
+
+      <h2>Justifying maximal margin</h2>
+      <p>
+        Is maximal margin a good inductive bias? One strand of argument,
+        summarized for example by Vapnik (<a
+          class="cite"
+          href="#ref-vapnik-1999"
+          >1999</a
+        >), notes that the set of hypotheses with a larger margin has a lower VC
+        dimension than the set of hypotheses with a smaller margin. Since an
+        upper bound on the risk increases with the VC dimension, choosing the
+        hypothesis with the maximal margin minimizes this bound and thus
+        promotes good generalization.
+      </p>
+
+      <p>
+        A couple of issues with this argument. For one, the margin of a
+        hypothesis is determined in conjunction with a given dataset, whereas
+        the upper bound involves the VC dimension of the hypothesis space \(H\),
+        which is defined independently of the dataset. (By this reasoning, one
+        could always pick a hypothesis \(h\) and claim that it generalizes well
+        since the singleton space \(\{h\}\) has low VC dimension!) Mount (<a
+          class="cite"
+          href="#ref-mount-2015"
+          >2015</a
+        >) provides a nice summary on this issue, which has largely been
+        addressed by extensions of VC dimension.<footnote>
+          At the frontier of the extension work seems to be Rademacher
+          complexity. See, for example, Koltchinskii and Panchenko (<a
+            class="cite"
+            href="#ref-koltchinskii-2000"
+            >2000</a
+          >) and Bartlett and Mendelson (<a
+            class="cite"
+            href="#ref-bartlett-2002"
+            >2002</a
+          >).
+        </footnote>
+      </p>
+
+      <p>
+        Another issue is that minimizing an upper bound of something does not
+        translate to minimizing the thing. The literature's view on this gap can
+        feel quite harsh. Works such as Zhang et al. (<a
+          class="cite"
+          href="#ref-zhang-2017"
+          >2017</a
+        >), Nagarajan and Kolter (<a class="cite" href="#ref-nagarajan-2019"
+          >2019</a
+        >), and Gastpar et al. (<a class="cite" href="#ref-gastpar-2024">2024</a
+        >) cast doubt on the usefulness of any bounds based on the uniform
+        convergence approach.
+      </p>
+
+      <p>
+        A different strand of argument, which I think better captures the
+        intuitive appeal of the maximal-margin classifier, notes that observed
+        data
+        may be perturbed with noise. If so, it would be sensible to choose a
+        classifier that is far away from individual observations to avoid
+        contamination. Xu et al. (<a
+          class="cite"
+          href="#ref-xu-2009"
+          >2009</a
+        >) provide a rigorous version of this argument.
+      </p>
+
+      <h2>Taking stock</h2>
+      <p>
+        We have considered the hypothesis space generated by the linear
+        threshold function \(\eqref{eq:ltf}\). We started by noticing that the
+        Rosenblatt algorithm can be seen as following the principle of ERM if we
+        are willing to use a surrogate loss function to make the problem convex.
+        Doing so allowed us to notice a technical problem with the objective
+        function which we fixed by introducing the hinge loss. Finally, we
+        described the SVM as incorporating an inductive bias in the form of
+        maximal margin.
+      </p>
+
+      <p>
+        The examples of perceptron so far have had a fairly restricted type of
+        the hypothesis space. All the iterations have been on the learning
+        algorithm alone. Time to examine the role of hypothesis space.
+      </p>
+
+      <!-- #endregion -->
+
+      <!-- #region MP perceptron -->
+      <h1>Minsky &amp; Papert perceptron</h1>
+      <p>
+        The definition of perceptron given by Minsky and Papert (<a
+          class="cite"
+          href="#ref-minsky-1969"
+          >1969</a
+        >), henceforth MP, applies to the binary output space \(\mathcal{Y} =
+        \{0, 1\}\) and takes the hypothesis generating function to be
+        \[\begin{equation}\label{eq:mp_perceptron} h(x, \theta) = \ind \left(
+        \theta \cdot \varphi(x) > 0\right), \end{equation}\] where \(\varphi:
+        \mathcal{X} \to \R^L\) and \(\theta \in \R^L\) for some positive integer
+        \(L\). I will call
+      </p>
+      <ul>
+        <li>the function \(\varphi\) the <dfn>feature map</dfn>,</li>
+        <li>
+          the \(L\)-vector \(\varphi(x)\) the <dfn>feature vector</dfn>, and
+        </li>
+        <li>
+          the codomain of the feature map, \(\R^L\), the
+          <dfn>feature space</dfn>.<footnote>
+            More generally, the feature space can be any inner product space. In
+            the book, MP restricts the feature space to be \(\{0,1\}^L\).
+          </footnote>
+        </li>
+      </ul>
+
+      <p>
+        Clearly, the linear threshold hypothesis generating function
+        \(\eqref{eq:ltf}\) is a special case with the feature map \(\varphi(x) =
+        (1, x_1, \dots, x_K)\). Conversely, one could reasonably see the MP
+        perceptron as a simple perceptron with processed input data, in which
+        case the generalization does not gain us much. I think, however, that
+        folding the feature map into the perceptron rather than the dataset
+        provides a useful framing. As the &sect;kernel SVMs show, applying
+        features does not require computing the features prior to executing the
+        learning algorithm. Thus, "data processing" can be a misleading
+        interpretation.
+      </p>
+
+      <p>
+        Because the definition of MP perceptron imposes no restriction on the
+        feature map, it allows quite a broad range of hypothesis spaces. For
+        example, if \(\mathcal{X}\) is finite, then there exists an MP
+        perceptron whose hypothesis space is \(F(\mathcal{X},
+        \mathcal{Y})\).<footnote>
+          Indeed, one can choose the feature map \(\varphi\) so that each
+          component function \(\varphi_\ell\) corresponds to a function in
+          \(F(\mathcal{X}, \mathcal{Y})\). Then for any \(f^* \in F(\mathcal{X},
+          \mathcal{Y})\), we can set the corresponding coefficient to a positive
+          number, say 1, and all other coefficients to zero. The resulting
+          hypothesis is identical to \(f^*\) since \(\ind(f^*(x) > 0) =
+          f^*(x)\). This result is Theorem 1 of Rosenblatt (<a
+            class="cite"
+            href="#ref-rosenblatt-1962"
+            >1962</a
+          >), which he acknowledges to be "of little practical interest." MP
+          likewise reiterate that such a feature map is "impossible in practice"
+          since the feature space dimension "would have to be astronomically
+          large." These texts suggest that, at the time, the main motivation for
+          restricting the hypothesis space was computational feasibility rather
+          than providing inductive bias.
+        </footnote>
+      </p>
+
+      <h2>Locality</h2>
+      <p>
+        MP's main agenda is to examine what functions are excluded from the
+        hypothesis space when certain restrictions are imposed on the feature
+        map. Given \(\varphi(x) = (\varphi_1(x), \dots, \varphi_L(x))\), these
+        restrictions take the form of "locality" conditions on the component
+        functions \(\varphi_\ell\).
+      </p>
+
+      <h3>Order restriction</h3>
+      <p>
+        One example of locality is what MP call order restriction. An MP
+        perceptron is of <dfn>order \(\boldsymbol{n}\)</dfn> if each component
+        function \(\varphi_\ell\) depends on at most \(n\) coordinates of \(x
+        \in \mathcal{X}\). The simple perceptron, for instance, is an MP
+        perceptron of order 1.
+      </p>
+
+      <p>
+        A popular example considers order 1 perceptrons for binary operators.
+        Suppose \(\mathcal{X} = \{0, 1\}^2\), so that \(F(\mathcal{X},
+        \mathcal{Y})\) consists of all 16 binary Boolean operators. Then the
+        simple perceptron hypothesis space excludes two operators: XOR,
+        \(\ind(x_1 \neq x_2)\), and its negation, XNOR, \(\ind(x_1 =
+        x_2)\).<footnote>
+          To prove that XOR is excluded from the order 1 hypothesis space, we
+          can show that there is no \((\theta_0, \theta_1, \theta_2) \in \R^3\)
+          such that \(h(x_1, x_2) = \ind(\theta_0 + \theta_1 x_1 + \theta_2 x_2
+          > 0)\) is the XOR function, i.e. \(h(0, 0) = h(1, 1) = 0\) and \(h(0,
+          1) = h(1, 0) = 1\). In other words, we would need the following system
+          to hold: \(-\theta_0 \geq 0\), \(\theta_1 + \theta_2 \leq -\theta_0\),
+          \(\theta_1 > -\theta_0\), and \(\theta_2 > -\theta_0\). Indeed, since
+          \(-\theta_0\) must be non-negative, and \(\theta_1\) and \(\theta_2\)
+          are each greater than \(-\theta_0\), their sum must be greater than
+          \(-\theta_0\), showing the system has no solution.
+        </footnote>
+      </p>
+
+      <h3>Diameter restriction</h3>
+      <p>
+        Another example of locality is diameter restriction, which requires each
+        component function \(\varphi_\ell\) of the feature map to depend only on
+        a set of points whose <a href="https://w.wiki/H37W">diameter</a> is no
+        greater than a pre-specified threshold.
+        <a href="#fig-diameter-restriction" class="fig-ref"></a>, reproduced
+        from MP, illustrates this restriction.
+      </p>
+
+      <div
+        class="png-figure"
+        id="fig-diameter-restriction"
+        data-src="figures/diameter_restriction.png"
+        data-caption-html="Diameter restricted perceptron from Minsky and Papert (<a class='cite' href='#ref-minsky-1969'>1969</a>)"
+      ></div>
+
+      <p>
+        The figure shows an input observation, a &#12601;-shaped image. Each
+        disc corresponds to the effective domain of a component function
+        \(\varphi_\ell\). Since the diameter of each disc is fixed, each
+        \(\varphi_\ell\) can examine only part of the image.
+      </p>
+
+      <p>
+        MP shows that MP perceptrons with diameter restriction cannot detect
+        connectedness &mdash; whether the given image can be drawn without
+        lifting a pen. The proof, which parallels the proof that the order 1
+        perceptron excludes the XOR function, is illustrated by another figure
+        from MP, reproduced in
+        <a href="#fig-connectedness" class="fig-ref"></a>.
+      </p>
+
+      <div
+        class="png-figure"
+        id="fig-connectedness"
+        data-src="figures/connectedness.png"
+        data-caption="Diameter restricted perceptron cannot detect connectedness"
+      ></div>
+
+      <p>
+        The input \(X_{00}\) is not connected, but \(X_{01}\) is. The only
+        difference between these two images occurs on the right-hand side. So
+        the functions in group 2 of
+        <a href="#fig-diameter-restriction" class="fig-ref"></a>
+        must increase their output values going from \(X_{00}\) to \(X_{01}\) so
+        that the score turns positive. By the same reasoning, the left-hand side
+        functions of group 1 must increase their output values going from
+        \(X_{00}\) to \(X_{10}\). It follows that the perceptron must have a
+        positive score for \(X_{11}\), higher than the output values for either
+        \(X_{01}\) or \(X_{10}\). And yet, \(X_{11}\) is not connected.
+      </p>
+
+      <h2>Responses</h2>
+      <p>
+        The central result of MP is that the hypothesis spaces generated by
+        locality restrictions on the feature map, such as finite order or
+        diameter, exclude many predicates, such as connectedness. The implied
+        conclusion is that perceptrons in general are fundamentally limited in
+        their capabilities and cannot by themselves attain human-like
+        intelligence.<footnote>
+          The book eagerly frames itself as a neutral investigation rather than
+          a criticism of the perceptron: "It is no more apt to describe our
+          mathematical theorems as pessimistic than it would be to say the same
+          about deducing the conservation of momentum from the laws of
+          mechanics." It is no secret, however, that the authors took a critical
+          stance (Olazaran, <a class="cite" href="#ref-olazaran-1996">1996</a>). In the epilogue of the expanded edition, MP
+          write: "Our research on perceptrons and on other computational schemes
+          has left us with a pervasive bias against seeking a general,
+          domain-independent theory of 'how neural networks work.'"
+        </footnote>
+      </p>
+
+      <p>
+        A critical response to the result questions two aspects of it. One is
+        the nature of the excluded predicates, and the other is the nature of
+        the locality restriction.
+      </p>
+
+      <h3>Should perceptrons detect connectedness?</h3>
+      <p>
+        It is a tautology that if \(f^* \notin H\), then \(\phi(D(X, f^*)) \neq
+        f^*\) for any learning algorithm \(\phi\) and input dataset \(X\). Or,
+        as MP put it, "No machine can learn to recognize X unless it possesses,
+        at least potentially, some scheme for <em>representing</em> X." So the
+        observation that connectedness is excluded is meaningful only if we
+        think such predicates are important in some sense. MP's implication
+        seems to be that connectedness is an "easy" task that any learning
+        machine ought to be able to do. (They make the point by including a
+        "serial" algorithm for detecting connectedness.)
+      </p>
+
+      <p>
+        But detecting connectedness and other properties such as symmetry is not
+        as easy as it may first seem. Humans also struggle with such tasks when
+        the image is sufficiently large and complex. Given the goal of mimicking
+        human intelligence, failure to reliably detect connectedness for
+        arbitrarily large images may not be a major deficiency.
+      </p>
+
+      <p>
+        MP push back in the expanded edition, arguing that humans <em>can</em>
+        detect connectedness and symmetry even for large and complex images,
+        just not at first sight as we can for smaller images. We adopt a
+        different mode of thinking, one that is slower and more deliberate, and
+        often reach the correct answer.
+      </p>
+
+      <h3>Is locality a reasonable restriction?</h3>
+      <p>
+        MP's formal results focus on "locality" constraints, primarily finite
+        order and diameter. The main justifications for such restrictions are
+        analytical tractability and computational feasibility. (Notions of
+        inductive bias and generalization are absent in MP.) But by the time MP
+        was published, perceptron researchers had already been working on
+        "non-local" feature maps in the form of multilayered perceptrons &mdash;
+        MP perceptrons whose component functions \(\varphi_\ell\) are themselves
+        MP perceptrons, i.e. each takes the form \(\eqref{eq:mp_perceptron}\)
+        for some parameter \(\theta\).
+      </p>
+
+      <p>
+        While the formal results do not apply to multilayer perceptrons, MP do
+        not hesitate to offer pessimistic conjectures:
+      </p>
+      <blockquote>
+        There is no reason to suppose that any of these virtues [of
+        single-layered perceptrons] carry over to the many-layered version.
+        Nevertheless, we consider it to be an important research problem to
+        elucidate (or reject) our intuitive judgment that the extension is
+        sterile.
+      </blockquote>
+
+      <p>
+        Safe to say, the multilayer extension proved to be far from sterile, and
+        even a cursory look at the topic would require a separate note. In MP's
+        defense, they expected multilayer perceptrons to reach a computational
+        bottleneck, one overcome primarily by the growth of computational power
+        rather than by algorithmic efficiency.<footnote>
+          Olazaran (<a class="cite" href="#ref-olazaran-1996">1996</a>) includes an interview with Minsky. Regarding
+          "intuitive judgment", Minsky said: "Now, 'efficiently' in the 1960s
+          meant a few thousand trials. Of course now if it does it in a million
+          trials it is not so bad."
+        </footnote>
+      </p>
+
+      <h2>Kernel SVM</h2>
+      <p>
+        Multilayer perceptrons are not the only way to feasibly relax the
+        locality constraint on the feature map. SVMs, too, can accommodate
+        arbitrarily complex feature maps through a clever trick.
+      </p>
+
+      <p>
+        To illustrate the need for the trick in the first place, suppose we want
+        a feature map consisting of all the 4th-degree polynomial terms of the
+        MNIST inputs. Since each MNIST input is a 784-vector, this would yield a
+        feature vector of length \({784 + 4 \choose 4}\), about 16 billion
+        altogether. If we used a subgradient method to solve the SVM problem,
+        each update would require calculating dot products of
+        16-billion-dimensional vectors.
+      </p>
+
+      <p>
+        Two observations in tandem help us solve this computational problem.
+      </p>
+      <ol>
+        <li>
+          The representer theorem tells us that the solution to the SVM problem
+          lies in the span of the input data, meaning \(w^* = \sum_{i=1}^N c_i
+          x_i\) for some coefficient vector \(c = (c_1, \dots, c_N) \in \R^N\).
+          So we can solve for the \(N\)-dimensional \(c\) instead of the
+          \(K\)-dimensional \(w\) directly.
+        </li>
+        <li>
+          If a function \(k : \mathcal{X}^2 \to \R\), called a (Mercer) kernel,
+          satisfies \(k(x_i, x_j) = \varphi(x_i) \cdot \varphi(x_j)\) for some
+          feature map \(\varphi\), then we can replace \(x_i \cdot x_j\) with
+          \(k(x_i, x_j)\) and work with the expanded feature space without
+          explicitly computing the feature vectors.
+        </li>
+      </ol>
+
+      <!-- <p>
+        Kernel method allows bypassing this computational burden. Slightly
+        generalizing the MP setup, suppose we are given a finite set of
+        functions \(\Phi = \{\varphi_1, \dots, \varphi_L\}\) where \(\varphi_i
+        \in F(\mathcal{X}, \R)\) for each \(i = 1, \dots L\). Let's smoosh them
+        together and define \(\varphi: \mathcal{X} \to \R^L\) where \(\varphi(x)
+        = (\varphi_1(x), \dots, \varphi_L(x))\).
+      </p>
+
+      <p>
+        We now need to keep track of two input data. The original input
+        observation \(x_i = (x_{i,1}, \dots, x_{i,K})\) consisting of \(K\)
+        values, and the expanded input observation \(\varphi(x_i) =
+        (\varphi_1(x_i), \dots, \varphi_L(x_i))\) consisting of \(L\) values.
+      </p> -->
+
+      <h3>The representer theorem</h3>
+      <p>
+        To state the first observation cleanly, let us temporarily return to the
+        linear SVM setting and suppress the feature map. The representer theorem
+        tells us that the solution to the SVM problem lies in the span of the
+        input data, meaning \(w^* = \sum_{i=1}^N c_i x_i\) for some coefficient
+        vector \(c = (c_1, \dots, c_N) \in \R^N\). This allows us to solve for
+        the \(N\)-dimensional \(c\) instead of the \(K\)-dimensional \(w\)
+        directly.
+      </p>
+
+      <p>
+        To see this result, consider solving the SVM minimization problem
+        \(\eqref{eq:svm}\) by a subgradient method. For now, let's fix the bias
+        term \(b_\theta\) and minimize the objective over the weights
+        \(w_\theta\). It is useful to define \[\begin{align*} s_i(w) &:= \delta
+        - \tilde{y}_i (b_\theta + w \cdot x_i), \\ \tilde{e}_i(w) &:=
+        \tilde{y}_i \ind(s_i(w) > 0), \\ \tilde{\xi}_i(w) &:= \max\{0, s_i(w)\},
+        \end{align*}\] so that we can write the SVM objective as a function of
+        \(w\): \[\begin{equation}\label{eq:svm_objective_w} f(w) := \frac{1}{N}
+        \sum_{i=1}^N \tilde{\xi}_i(w) + \lambda \frac{1}{2} \lVert w \rVert^2.
+        \end{equation}\]
+      </p>
+
+      <p>
+        For any given initial guess \(w_0 \in \R^K\) and step size sequence
+        \((\eta_0, \eta_1, \eta_2, \dots)\), a subgradient method produces a
+        sequence \((w_0, w_1, w_2, \dots)\) by \[w_{t+1} = w_t - \eta_t \nabla
+        f(w_t)\] for all \(t = 0, 1, 2, \dots\), where \(\nabla f(w_t)\) is a
+        subgradient of \(f\) evaluated at \(w_t\). One valid choice is
+        \[\begin{equation}\label{eq:svm_subgradient} \nabla f(w_t) = -
+        \frac{1}{N} X^\mathsf{T} \tilde{e}(w_t) + \lambda w_t. \end{equation}\]
+        With large \(K\), evaluating this subgradient presents a computational
+        challenge because it requires the dot products \(w_t \cdot x_i\) at each
+        update step.
+      </p>
+
+      <p>
+        Notice, however, that if we start from the zero vector \(w_0 = 0\), then
+        \(w_1 = \eta_0 \frac{1}{N} \sum_{i=1}^N \tilde{e}_i(w_0) x_i\) is a
+        linear combination of the input data \(\{x_1, \dots, x_N\}\). The same
+        is true of \(w_2\), which is a weighted sum of \(w_1\) and
+        \(\sum_{i=1}^N \tilde{e}_i(w_1) x_i\). By induction, every member of the
+        sequence \((w_1, w_2, \dots)\) is a linear combination of the input
+        data. That is, \(w_t \in \span\{x_1, \dots, x_N\}\) for all \(t = 1, 2,
+        \dots\).
+      </p>
+
+      <p>
+        With the constraint \(w_t = \sum_{i=1}^N c_{i,t} x_i = X^\mathsf{T}
+        c_t\) for some coefficient vector \(c_t = (c_{1,t}, \dots, c_{N,t}) \in
+        \R^N\), we have \[ w_t \cdot x_i = \sum_{j=1}^N c_{j,t} (x_j \cdot x_i)
+        = (Gc_t)_i, \] where \(G := XX^\mathsf{T}\) is the
+        <a href="https://w.wiki/HyAc">Gram matrix</a> of the input data \(x_1,
+        \dots, x_N\), meaning its \(ij\)-th entry is \(x_i \cdot x_j\). This
+        already eases the computational burden. Since the dot products \(x_j
+        \cdot x_i\) are invariant across steps \(t\), we can compute them once
+        at the beginning rather than at every update step.
+      </p>
+
+      <p>
+        If the input space dimension is in the billions or higher, computing the
+        dot product even once may not be feasible. But if that high
+        dimensionality comes from a feature map, as in our motivating example of
+        fourth-degree polynomial expansion, then there may be ways to compute
+        the corresponding dot product much more easily. Before we discuss that,
+        however, let's return to the subgradient method and push the observation
+        a little further.
+      </p>
+
+      <p>
+        We've established that starting from the zero vector \(w_0 = 0\), each
+        update \(w_t\) produced by the subgradient method belongs to the span of
+        the dataset \(\span\{x_1, \dots, x_N\}\), an at-most-\(N\)-dimensional
+        subspace. Since the
+        objective \(\eqref{eq:svm_objective_w}\) is strictly convex if \(\lambda
+        > 0\), there is a unique minimizer \(w^*\), and with an appropriate step
+        size sequence \((\eta_t)\), the subgradient method converges to it,
+        \(w_t \to w^*\).
+      </p>
+
+      <p>
+        Since the span is a finite-dimensional subspace,
+        <a
+          href="https://planetmath.org/everysubspaceofanormedspaceoffinitedimensionisclosed"
+          >it is closed</a
+        >. So the limit of the sequence \((w_t)\), namely the minimizer \(w^*\),
+        also belongs to the span. In other words, the minimizer of the SVM
+        satisfies \(w^* = \sum_{i=1}^N c_i x_i\) for some coefficients \((c_1,
+        \dots, c_N) \in \R^N\).
+      </p>
+
+      <p>
+        The result holds for a more general class of objective functions and is
+        known as the
+        <a href="https://w.wiki/HtET">representer theorem</a> (Kimeldorf &amp;
+        Wahba, <a class="cite" href="#ref-kimeldorf-1970">1970</a>;
+        Sch&ouml;lkopf et al., <a class="cite" href="#ref-scholkopf-2001">2001</a
+        >).<footnote>
+          Here's a simplified version of the proof for the SVM objective in a
+          finite-dimensional inner product space. Let \(V = \span\{x_1, \dots,
+          x_N\}\). Then \(\R^K = V \oplus V^\perp\) where \(V^\perp\) is the
+          <a href="https://w.wiki/HvYx">orthogonal complement</a>
+          of \(V\). This means that for any \(w \in \R^K\), there exists a
+          unique representation \(w = v + u\) where \(v \in V\) and \(u \in
+          V^\perp\). Note that the hinge loss term \(\tilde\xi_i(w)\) depends on
+          \(w\) only through \(w \cdot x_i = (v + u) \cdot x_i = v \cdot x_i\),
+          where the last equality follows from \(u \in V^\perp\). So the hinge
+          loss depends on \(w\) only through \(v\), its projection onto \(V\).
+          Furthermore, by the
+          <a
+            href="https://en.wikipedia.org/wiki/Pythagorean_theorem#Inner_product_spaces"
+            >Pythagorean theorem</a
+          >, \(\lVert w \rVert^2 = \lVert v \rVert^2 + \lVert u \rVert^2\), so
+          it is minimized when \(u = 0\). Therefore, if \(w^*\) is a minimizer,
+          then \(w^* \in V\).
+        </footnote>
+      </p>
+
+      <h3>Mercer kernels</h3>
+
+      <p>
+        Let's return to the computational problem we had: calculating the dot
+        product \(\varphi(x) \cdot \varphi(x')\) when the feature space is
+        high-dimensional, i.e. \(\varphi : \mathcal{X} \to \R^L\) with large
+        \(L\). For a simple illustration, suppose the input space is
+        \(\mathcal{X} = \R^2\), and the feature space contains all quadratic
+        terms. Denote two input observations by \(x = (a, b)\) and \(x' = (a',
+        b')\), so we can write the feature map as \(\varphi(x) = (a^2, b^2,
+        \sqrt{2}ab, \sqrt{2}a, \sqrt{2}b, 1)\). Why the \(\sqrt{2}\) scaling?
+        Notice \[\begin{align*} (x \cdot x' + 1)^2 &= (aa' + bb' + 1)^2 \\ &=
+        (aa')^2 + (bb')^2 + 2aa'bb' + 2aa' + 2bb' + 1 \\ &= \varphi(x) \cdot
+        \varphi(x'). \end{align*}\] So we can compute the dot product in this
+        6-dimensional feature space from the dot product of the 2-dimensional
+        inputs using the function \(k(x, x') := (x \cdot x' + 1)^2\).
+      </p>
+
+      <p>
+        More generally, for higher-degree polynomial feature maps, we can use
+        the function \[ k(x, x') = (x \cdot x' + c)^d \] where \(c \geq 0\) is a
+        constant and \(d\) is the polynomial degree. So, if we wanted a
+        fourth-degree polynomial feature map as in our motivating example, we
+        could use, say, \(k(x, x') = (x \cdot x' + 1)^4\).
+      </p>
+
+      <p>
+        It is natural to ask at this point: what about other feature spaces? But
+        this leads to a treacherous path. One issue is that we first need to
+        clarify what we want from a function \(k\) beyond the identity \(k(x,
+        x') = \varphi(x) \cdot \varphi(x')\). Roughly, we want \(k\) to be
+        computationally simple, but we have already seen how difficult it is to
+        make simplicity precise. More importantly, we do not really care about a
+        specific feature space. We just want one broad enough to capture the
+        data generating function.
+      </p>
+
+      <p>
+        So, instead of committing to a feature map \(\varphi\) and then looking
+        for a "simple" function \(k\) that computes the dot product, we ask the
+        reverse: what are the properties of a function \(k : \mathcal{X}^2 \to
+        \R\) such that \(k(x, x') = \varphi(x) \cdot \varphi(x')\) for
+        <em>some</em> feature map \(\varphi\)?
+      </p>
+
+      <p>
+        For one, since dot product is symmetric (in real spaces), \(\varphi(x)
+        \cdot \varphi(x') = \varphi(x') \cdot \varphi(x)\), the function \(k\)
+        must also be symmetric, \(k(x, x') = k(x', x)\). More generally, for any
+        dataset \(X = (x_1, \dots, x_N)\), the matrix \(K\) whose \(ij\)-th
+        entry is \(k(x_i, x_j)\) must be the Gram matrix of \(\varphi(x_1),
+        \dots, \varphi(x_N)\). But a matrix is a Gram matrix if and only if it
+        is positive semidefinite. This leads to the notion of a
+        <a href="https://w.wiki/HyAZ">Mercer kernel</a>: A function \(k :
+        \mathcal{X}^2 \to \R\) is a (Mercer) <dfn>kernel</dfn> if the matrix
+        \(K\), whose \(ij\)-th entry is \(k(x_i, x_j)\), is positive
+        semidefinite for any dataset \(X \in \mathcal{X}^N\).<footnote
+          >A covariance matrix is positive semidefinite, and any positive
+          semidefinite matrix is a covariance matrix of some random variables.
+          So the term kernel function is used synonymously with covariance
+          function.
+        </footnote>
+      </p>
+
+      <p>
+        This definition also gives us a way to build new kernels from existing
+        ones. For example, since sums and
+        <a href="https://w.wiki/HyBi"
+          >entrywise products of positive semidefinite matrices are positive
+          semidefinite</a
+        >, sums, products, and powers of kernels remain kernels. From this, it
+        is easy to see that \(k(x, x') = (x \cdot x' + c)^d\) is a kernel for
+        \(c \geq 0\).
+      </p>
+
+      <p>
+        If we trust that maximal margin provides a sufficiently good inductive
+        bias, then it is natural to seek kernels that make the hypothesis space
+        as broad as computationally feasible. A popular choice is the Gaussian
+        or <a href="https://w.wiki/HttL">radial basis function (RBF) kernel</a>:
+        \[k(x, x') = \exp(-\gamma\lVert x - x'\rVert^2)\] with parameter
+        \(\gamma > 0\). Roughly speaking, it corresponds to a feature map with
+        polynomial terms of all degrees, so its associated feature space is
+        infinite-dimensional.<footnote>
+          Indeed, \[ \exp\left(-\gamma \lVert x - x' \rVert^2\right) =
+          \exp\left(-\gamma \lVert x \rVert^2\right) \exp\left(-\gamma \lVert x'
+          \rVert^2\right) \exp\left(2\gamma x \cdot x'\right). \] Since
+          \(\exp(t) = \sum_{m=0}^\infty t^m / m!\), the linear expansion of the
+          last term includes powers of \(x \cdot x'\) of every degree.
+        </footnote>
+      </p>
+      <p>
+        In the simplified case where the bias is fixed to zero, one
+        implementation of the kernel SVM procedure is as follows.
+      </p>
+
+      <ol class="pseudocode">
+        <li>
+          Given
+          <ul>
+            <li>
+              a dataset \((X, \tilde{y})\), where \(X = (x_1, \dots, x_N)\) and
+              \(\tilde{y}_i \in \{-1, 1\}\), and
+            </li>
+            <li>a kernel \(k : \mathcal{X}^2 \to \R\),</li>
+          </ul>
+        </li>
+        <li>
+          Choose
+          <ul>
+            <li>the initial coefficient vector \(c_0 \in \R^N\),</li>
+            <li>the weight on the margin term \(\lambda > 0\),</li>
+            <li>the length of the sequence \(T > 0\), and</li>
+            <li>
+              the step-size sequence \((\eta_1, \dots, \eta_T)\), with each
+              \(\eta_t > 0\),
+            </li>
+          </ul>
+        </li>
+        <li>
+          Compute the Gram matrix \(K \in \R^{N \times N}\) with \(K_{ij} =
+          k(x_i, x_j)\).
+        </li>
+        <li>
+          Recursively define the sequence \((c_1, \dots, c_T)\) by \[ c_{t+1} :=
+          c_t + \eta_{t+1}\left(\frac{1}{N}\tilde{e}(c_t) - \lambda c_t\right),
+          \] where \[ \tilde{e}_i(c_t) := \tilde{y}_i \ind\left(1 - \tilde{y}_i
+          (Kc_t)_i > 0\right), \quad i = 1, \dots, N. \]
+        </li>
+        <li>
+          Return \(c_T\). The predicted output value can be computed as \[
+          \phi(x) = \ind\left(\sum_{i=1}^N c_{i,T} k(x_i, x) > 0\right). \]
+        </li>
+      </ol>
+
+      <div class="example">
+        <h3>Example: Kernel SVM on MNIST</h3>
+        <div
+          class="plotly-figure"
+          id="fig-svm-kernel"
+          data-src="figures/svm_kernel.json"
+          data-caption="Error rates of kernel SVMs"
+        ></div>
+
+        <p>
+          To compare with the earlier linear SVM, I again used the MNIST dataset
+          restricted to digits 4 and 9, and fit SVMs with several kernels over a
+          range of \(\lambda\) values. Compared with the earlier linear SVM
+          results, the kernelized versions achieved significantly lower test
+          error: the best kernel runs were around \(0.8\%\) to \(1.0\%\), whereas
+          the best linear SVM result was about \(2.8\%\).
+        </p>
+        <p>
+          Kernel SVMs thus show that a broad feature space need not be
+          computationally prohibitive. We do not need to explicitly construct the
+          feature map, so long as we can compute the corresponding dot products
+          through a kernel function. In this way, kernels offer another route
+          around the locality restrictions emphasized by MP.
+        </p>
+      </div>
+      <!-- #endregion -->
+      <h1>TLDR</h1>
+      <ol>
+        <li>
+          A learning machine tries to infer the relationship between input and
+          output variables from sample observations of input-output pairs. That
+          is a difficult problem. To make meaningful inferences, you need some
+          prior &mdash; a sense of which relationships are more likely than
+          others before you observe anything.
+        </li>
+        <li>
+          A perceptron is a learning machine endowed with two components: the
+          hypothesis space, the set of candidate relationships it can choose from,
+          and the learning algorithm, a rule for picking one hypothesis.
+          This is a much broader description than what someone today would
+          usually mean by perceptron, but I think it fairly reflects what
+          Rosenblatt had in mind when he coined the term.
+        </li>
+        <li>
+          Why restrict the hypothesis space in the first place? Because doing so
+          lets you rule out relationships you regard as unlikely. Yes, that is a
+          blunt way to impose a prior. Minsky and Papert wrote a whole book
+          about just how blunt it is.
+        </li>
+        <li>
+          If the observations reflect the input-output relationship accurately,
+          then the candidate hypothesis should at least match the observed
+          input-output pairs. More pompously, you can say the learning algorithm
+          should minimize the empirical risk.
+        </li>
+        <li>
+          Historically, people have closely studied the case where the output is
+          binary and each hypothesis takes a weighted sum of input values and
+          checks whether the sum exceeds some threshold. Rosenblatt's original
+          algorithm minimizes a version of empirical risk in this setting.
+        </li>
+        <li>
+          Empirical risk minimization alone does not help you infer beyond what
+          you observe. Supplement the Rosenblatt algorithm with an additional
+          prior, namely a preference for higher-margin hypotheses, and you get a
+          support vector machine. It picks a hypothesis that fits both the
+          observations and the prior well.
+        </li>
+        <li>
+          Modern perceptrons can work with much larger hypothesis spaces (in
+          part through the growth of raw computational power). One example is
+          the support vector machine with the so-called kernel trick. Another is
+          the multilayer perceptron, or neural network, which is the topic of my
+          next study note.
+        </li>
+      </ol>
+
+      <!-- #region References -->
+      <section id="references">
+        <h2 id="references-header" data-toc-ignore>
+          References
+          <button
+            id="references-toggle"
+            type="button"
+            aria-label="Toggle references"
+            aria-controls="references-list"
+            aria-expanded="true"
+          >
+            &#x25BC;
+          </button>
+        </h2>
+        <ul class="references" id="references-list">
+        <li id="ref-bartlett-2002">
+          <a href="https://jmlr.org/papers/v3/bartlett02a.html"
+            ><span class="lead">Bartlett, P. L., &amp; Mendelson, S. (2002).</span> Rademacher and
+            Gaussian complexities: Risk bounds and structural results.
+            <em>Journal of Machine Learning Research</em>, 3, 463&ndash;482.</a
+          >
+        </li>
+        <li id="ref-bishop-1995">
+          <a href="https://doi.org/10.1093/oso/9780198538493.001.0001"
+            ><span class="lead">Bishop, C. M. (1995).</span>
+            <em>Neural Networks for Pattern Recognition</em>. Oxford University
+            Press.</a
+          >
+        </li>
+        <li id="ref-block-1962">
+          <a href="https://doi.org/10.1103/RevModPhys.34.123"
+            ><span class="lead">Block, H. D. (1962).</span> The perceptron: A model for brain functioning.
+            <em>Reviews of Modern Physics</em>, 34(1), 123&ndash;135.</a
+          >
+        </li>
+        <li id="ref-duda-2000">
+          <a href="https://www.wiley.com/en-kr/Pattern+Classification%2C+2nd+Edition-p-9780471056690"
+            ><span class="lead">Duda, R. O., Hart, P. E., &amp; Stork, D. G. (2000).</span>
+            <em>Pattern Classification</em> (2nd ed.). Wiley.</a
+          >
+        </li>
+        <li id="ref-freund-1999">
+          <a href="https://doi.org/10.1023/A:1007662407062"
+            ><span class="lead">Freund, Y., &amp; Schapire, R. E. (1999).</span> Large margin
+            classification using the perceptron algorithm.
+            <em>Machine Learning</em>, 37(3), 277&ndash;296.</a
+          >
+        </li>
+        <li id="ref-gamba-1961">
+          <a href="https://doi.org/10.1007/BF02822639"
+            ><span class="lead">Gamba, A., Gamberini, L., Palmieri, G., &amp; Sanna, R. (1961).</span>
+            Further experiments with PAPA. <em>Nuovo Cimento</em>, 20,
+            221&ndash;231.</a
+          >
+        </li>
+        <li id="ref-gastpar-2024">
+          <a href="https://openreview.net/forum?id=NkmJotfL42"
+            ><span class="lead">Gastpar, M., Nachum, I., Shafer, J., &amp; Weinberger, T. (2024).</span>
+            Fantastic generalization measures are nowhere to be found.
+            <em>International Conference on Learning Representations</em>.</a
+          >
+        </li>
+        <li id="ref-kelly-2007">
+          <a href="https://doi.org/10.1016/j.tcs.2007.04.010"
+            ><span class="lead">Kelly, K. T. (2007).</span> Ockham&rsquo;s razor, empirical complexity,
+            and truth-finding efficiency. <em>Theoretical Computer Science</em>,
+            383(2&ndash;3), 270&ndash;289.</a
+          >
+        </li>
+        <li id="ref-kimeldorf-1970">
+          <a href="https://doi.org/10.1214/aoms/1177697089"
+            ><span class="lead">Kimeldorf, G. S., &amp; Wahba, G. (1970).</span>
+            A correspondence between Bayesian estimation on stochastic processes
+            and smoothing by splines. <em>The Annals of Mathematical
+            Statistics</em>, 41(2), 495&ndash;502.</a
+          >
+        </li>
+        <li id="ref-koltchinskii-2000">
+          <a href="https://doi.org/10.1007/978-1-4612-1358-1_29"
+            ><span class="lead">Koltchinskii, V., &amp; Panchenko, D. (2000).</span> Rademacher processes
+            and bounding the risk of function learning. In
+            <em>High Dimensional Probability II</em> (pp. 443&ndash;459).
+            Birkh&auml;user.</a
+          >
+        </li>
+        <li id="ref-minsky-1969">
+          <a href="https://doi.org/10.7551/mitpress/11301.001.0001"
+            ><span class="lead">Minsky, M., &amp; Papert, S. (1969).</span>
+            <em>Perceptrons: An Introduction to Computational Geometry</em>. MIT
+            Press.</a
+          >
+        </li>
+        <li id="ref-mount-2015">
+          <a href="https://winvector.github.io/margin/margin.pdf"
+            ><span class="lead">Mount, J. (2015).</span> How sure are you that large margin implies low VC
+            dimension?</a
+          >
+        </li>
+        <li id="ref-nagarajan-2019">
+          <a href="https://arxiv.org/abs/1902.04742"
+            ><span class="lead">Nagarajan, V., &amp; Kolter, J. Z. (2019).</span> Uniform convergence may
+            be unable to explain generalization in deep learning.
+            <em>Advances in Neural Information Processing Systems</em>, 32.</a
+          >
+        </li>
+        <li id="ref-nilsson-1965">
+          <a href="https://openlibrary.org/books/OL5908236M/Learning_machines"
+            ><span class="lead">Nilsson, N. J. (1965).</span>
+            <em
+              >Learning Machines: Foundations of Trainable Pattern-Classifying
+              Systems</em
+            >. McGraw-Hill.</a
+          >
+        </li>
+        <li id="ref-nilsson-1998">
+          <a href="https://www.sciencedirect.com/book/9781558604674/artificial-intelligence-a-new-synthesis"
+            ><span class="lead">Nilsson, N. J. (1998).</span>
+            <em>Artificial Intelligence: A New Synthesis</em>. Morgan Kaufmann.</a
+          >
+        </li>
+        <li id="ref-novikoff-1962">
+          <a href="https://apps.dtic.mil/sti/tr/pdf/AD0298258.pdf"
+            ><span class="lead">Novikoff, A. B. (1962).</span> On convergence proofs for perceptrons.
+            <em
+              >Proceedings of the Symposium on Mathematical Theory of Automata</em
+            >, 12, 615&ndash;622.</a
+          >
+        </li>
+        <li id="ref-olazaran-1996">
+          <a href="https://doi.org/10.1177/030631296026003005"
+            ><span class="lead">Olazaran, M. (1996).</span> A sociological study
+            of the official history of the perceptrons controversy.
+            <em>Social Studies of Science</em>, 26(3), 611&ndash;659.</a
+          >
+        </li>
+        <li id="ref-rosenblatt-1957">
+          <a href="https://books.google.com/books?id=P_XGPgAACAAJ"
+            ><span class="lead">Rosenblatt, F. (1957).</span>
+            <em>The Perceptron: A Perceiving and Recognizing Automaton</em>.
+            Report 85-460-1, Cornell Aeronautical Laboratory.</a
+          >
+        </li>
+        <li id="ref-rosenblatt-1958">
+          <a href="https://doi.org/10.1037/h0042519"
+            ><span class="lead">Rosenblatt, F. (1958).</span> The perceptron: A probabilistic model for
+            information storage and organization in the brain.
+            <em>Psychological Review</em>, 65(6), 386&ndash;408.</a
+          >
+        </li>
+        <li id="ref-rosenblatt-1962">
+          <a href="https://openlibrary.org/books/OL21076558M"
+            ><span class="lead">Rosenblatt, F. (1962).</span>
+            <em
+              >Principles of Neurodynamics: Perceptrons and the Theory of Brain
+              Mechanisms</em
+            >. Spartan Books.</a
+          >
+        </li>
+        <li id="ref-samuel-1959">
+          <a href="https://doi.org/10.1147/rd.33.0210"
+            ><span class="lead">Samuel, A. L. (1959).</span> Some studies in machine learning using the
+            game of checkers. <em>IBM Journal of Research and Development</em>,
+            3(3), 210&ndash;229.</a
+          >
+        </li>
+        <li id="ref-scholkopf-2001">
+          <a href="https://doi.org/10.1007/3-540-44581-1_27"
+            ><span class="lead">Schölkopf, B., Herbrich, R., &amp; Smola, A. J.
+            (2001).</span> A generalized representer theorem. In D. P. Helmbold
+            &amp; B. Williamson (Eds.), <em>Computational Learning Theory</em>
+            (Lecture Notes in Computer Science, Vol. 2111, pp.
+            416&ndash;426). Springer.</a
+          >
+        </li>
+        <li id="ref-shalev-shwartz-2010">
+          <a href="https://www.jmlr.org/papers/v11/shalev-shwartz10a.html"
+            ><span class="lead">Shalev-Shwartz, S., Shamir, O., Srebro, N.,
+            &amp; Sridharan, K. (2010).</span> Learnability, stability and uniform
+            convergence. <em>Journal of Machine Learning Research</em>, 11,
+            2635&ndash;2670.</a
+          >
+        </li>
+        <li id="ref-shalev-shwartz-2011">
+          <a href="https://doi.org/10.1007/s10107-010-0420-4"
+            ><span class="lead">Shalev-Shwartz, S., Singer, Y., Srebro, N., &amp; Cotter, A.
+            (2011).</span> Pegasos: Primal estimated sub-gradient solver for SVM.
+            <em>Mathematical Programming</em>, 127(1), 3&ndash;30.</a
+          >
+        </li>
+        <li id="ref-vapnik-1971">
+          <a href="https://doi.org/10.1137/1116025"
+            ><span class="lead">Vapnik, V. N., &amp; Chervonenkis, A. Y. (1971).</span> On the uniform
+            convergence of relative frequencies of events to their
+            probabilities. <em>Theory of Probability and Its Applications</em>,
+            16(2), 264&ndash;280.</a
+          >
+        </li>
+        <li id="ref-vapnik-1995">
+          <a href="https://openlibrary.org/works/OL16975337W/The_nature_of_statistical_learning_theory"
+            ><span class="lead">Vapnik, V. N. (1995).</span>
+            <em>The Nature of Statistical Learning Theory</em>. Springer.</a
+          >
+        </li>
+        <li id="ref-vapnik-1998">
+          <a href="https://www.wiley.com/en-us/Statistical+Learning+Theory-p-9780471030034"
+            ><span class="lead">Vapnik, V. N. (1998).</span>
+            <em>Statistical Learning Theory</em>. Wiley.</a
+          >
+        </li>
+        <li id="ref-vapnik-1999">
+          <a href="https://doi.org/10.1109/72.788640"
+            ><span class="lead">Vapnik, V. N. (1999).</span> An overview of statistical learning theory.
+            <em>IEEE Transactions on Neural Networks</em>, 10(5),
+            988&ndash;999.</a
+          >
+        </li>
+        <li id="ref-xu-2009">
+          <a href="https://jmlr.org/papers/v10/xu09b.html"
+            ><span class="lead">Xu, H., Caramanis, C., &amp; Mannor, S. (2009).</span> Robustness and
+            regularization of support vector machines.
+            <em>Journal of Machine Learning Research</em>, 10,
+            1485&ndash;1510.</a
+          >
+        </li>
+        <li id="ref-zhang-2017">
+          <a href="https://doi.org/10.1145/3446776"
+            ><span class="lead">Zhang, C., Bengio, S., Hardt, M., Recht, B., &amp; Vinyals, O.
+            (2017).</span> Understanding deep learning requires rethinking
+            generalization.
+            <em>International Conference on Learning Representations</em>.</a
+          >
+        </li>
+        </ul>
+      </section>
+      <!-- #endregion -->
+    </div>
+
+    <!-- JavaScript files -->
+    <script src="scripts/perceptron.js"></script>
+    <script src="scripts/toc.js"></script>
+    <script src="scripts/footnotes.js"></script>
+    <script>
+      document.querySelectorAll('a[href^="http"]').forEach(a => {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+      });
+    </script>
+  </body>
+</html>
+
+
+
+
