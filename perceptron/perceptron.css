@@ -4,15 +4,59 @@
   box-sizing: border-box;
 }
 
+/* ─── Theme variables ─────────────────────────────────── */
+:root {
+  --bg: #f0f0f0;
+  --text: #111;
+  --box-bg: rgba(255, 255, 255, 0.95);
+  --toc-link: #333;
+  --divider: rgba(0, 0, 0, 0.06);
+  --divider-strong: rgba(0, 0, 0, 0.08);
+  --pseudocode-comment: #444;
+  --ref-lead: #171a1d;
+  --ref-lead-hover: #0086bf;
+  --dfn-color: #cc1376;
+}
+
+html[data-theme="dark"] {
+  --bg: #111118;
+  --text: #ddd;
+  --box-bg: rgba(20, 20, 32, 0.98);
+  --toc-link: #ccc;
+  --divider: rgba(255, 255, 255, 0.08);
+  --divider-strong: rgba(255, 255, 255, 0.1);
+  --pseudocode-comment: #aaa;
+  --ref-lead: #e0e0e0;
+  --ref-lead-hover: #00c8ff;
+  --dfn-color: #e84da0;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --bg: #111118;
+    --text: #ddd;
+    --box-bg: rgba(20, 20, 32, 0.98);
+    --toc-link: #ccc;
+    --divider: rgba(255, 255, 255, 0.08);
+    --divider-strong: rgba(255, 255, 255, 0.1);
+    --pseudocode-comment: #aaa;
+    --ref-lead: #e0e0e0;
+    --ref-lead-hover: #00c8ff;
+    --dfn-color: #e84da0;
+  }
+}
+
 ::selection {
   background: #ff6600;
   color: #fff;
 }
 
 html, body {
-  background: #f0f0f0;
+  background: var(--bg);
+  color: var(--text);
   overflow-x: hidden;
   max-width: 100vw;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 /* Allow long display equations to scroll horizontally */
@@ -108,10 +152,11 @@ canvas {
   border-radius: 10px;
   overflow: hidden;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box,
+    linear-gradient(var(--box-bg), var(--box-bg)) padding-box,
     linear-gradient(135deg, #ff6600, #ff1493) border-box;
   padding: 0 1.5rem 1.2rem;
   margin: 1.5rem calc(-1.5rem - 3px) 2rem;
+  transition: background 0.3s ease;
 }
 
 #table-of-contents h2 {
@@ -173,12 +218,12 @@ canvas {
 }
 
 #toc-list > li + li {
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid var(--divider);
   padding-top: 0.4rem;
 }
 
 #toc-list a {
-  color: #333;
+  color: var(--toc-link);
   text-decoration: none;
   display: inline-block;
   padding: 0.15rem 0;
@@ -365,7 +410,7 @@ canvas {
 dfn {
   font-weight: 800;
   font-style: italic;
-  color: #cc1376;
+  color: var(--dfn-color);
 }
 
 /* MathJax equation container - allow proper width for equation numbers */
@@ -457,10 +502,11 @@ mjx-container[display="true"] {
   border-radius: 10px;
   overflow: hidden;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box,
+    linear-gradient(var(--box-bg), var(--box-bg)) padding-box,
     linear-gradient(135deg, #ff6600, #ff1493) border-box;
   padding: 0 1.5rem 1.2rem;
   margin: 1.5rem calc(-1.5rem - 3px) 2rem;
+  transition: background 0.3s ease;
 }
 
 .example h3 {
@@ -532,7 +578,7 @@ ol.pseudocode > li {
 
 ol.pseudocode > li + li,
 ol.pseudocode > ul + li {
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid var(--divider);
   padding-top: 0.5rem;
 }
 
@@ -548,7 +594,7 @@ ol.pseudocode > ul {
   list-style: none;
   padding-left: 1.2rem;
   margin: -0.4rem 0 0.5rem;
-  color: #444;
+  color: var(--pseudocode-comment);
 }
 
 ol.pseudocode > ul > li::before {
@@ -572,11 +618,12 @@ ol.pseudocode > ul > li::before {
   border-radius: 10px;
   overflow: hidden;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)) padding-box,
+    linear-gradient(var(--box-bg), var(--box-bg)) padding-box,
     linear-gradient(135deg, #00c8ff, #96ff32) border-box;
   padding: 0 1.5rem 0;
   margin: 1.5rem calc(-1.5rem - 3px) 0;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+  transition: background 0.3s ease;
 }
 
 #references-header {
@@ -662,7 +709,7 @@ ol.pseudocode > ul > li::before {
   top: 0;
   left: 1.5rem;
   right: 1.5rem;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--divider-strong);
 }
 
 #references-list li:hover,
@@ -701,13 +748,61 @@ ol.pseudocode > ul > li::before {
 
 #references-list .lead {
   font-weight: 700;
-  color: #171a1d;
+  color: var(--ref-lead);
 }
 
 #references-list a:hover .lead,
 #references-list a:focus-visible .lead {
-  color: #0086bf;
+  color: var(--ref-lead-hover);
   text-decoration: underline;
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.12em;
 }
+
+/* ─── Page controls (dark mode + GitHub link) ─────────── */
+.page-controls {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem 2rem;
+  display: flex;
+  gap: 1.5rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.page-controls button,
+.page-controls a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: "Space Mono", monospace;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.page-controls button:hover,
+.page-controls a:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+html[data-theme="light"] .page-controls button,
+html[data-theme="light"] .page-controls a {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="light"] .page-controls button:hover,
+html[data-theme="light"] .page-controls a:hover {
+  color: rgba(0, 0, 0, 0.75);
+}
+
+/* Show moon in dark mode, sun in light mode */
+html[data-theme="dark"]  .icon-sun  { display: none; }
+html[data-theme="dark"]  .icon-moon { display: inline; }
+html[data-theme="light"] .icon-moon { display: none; }
+html[data-theme="light"] .icon-sun  { display: inline; }

@@ -249,7 +249,68 @@ resizeCanvas();
 initCircleChains(0);
 requestAnimationFrame(animate);
 
-// Auto-load all Plotly figures
+// ── Plotly dark-mode theming ──────────────────────────────────────────────────
+
+// Store original figure data so we can re-theme on toggle
+const _loadedFigures = {};
+
+function _isDarkMode() {
+  return document.documentElement.getAttribute('data-theme') === 'dark';
+}
+
+// Hardcoded colors in the figures that need swapping in dark mode
+const _COLOR_MAP_DARK = {
+  '#2a3f5f':              '#ddd',               // text / labels
+  '#060611':              '#aaa',               // axis lines, markers, borders
+  'rgba(255,255,255,0.8)':'rgba(30,30,45,0.92)',// legend background
+};
+
+// Recursively deep-clone an object, swapping dark colors for light ones (or back)
+function _deepTheme(obj, isDark) {
+  if (typeof obj === 'string') {
+    if (!isDark) return obj; // light mode: use stored originals as-is
+    const lo = obj.toLowerCase().replace(/\s/g, ''); // normalise spaces
+    const mapped = _COLOR_MAP_DARK[lo];
+    if (mapped) return mapped;
+    return obj;
+  }
+  if (Array.isArray(obj)) return obj.map(v => _deepTheme(v, isDark));
+  if (obj !== null && typeof obj === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = _deepTheme(v, isDark);
+    return out;
+  }
+  return obj;
+}
+
+// Apply theme to both layout and data, returning { layout, data }
+function _applyPlotlyTheme(figure, isDark) {
+  const layout = {
+    ..._deepTheme(figure.layout, isDark),
+    width: undefined,
+    height: undefined,
+    autosize: true,
+  };
+  const data = _deepTheme(figure.data, isDark);
+  return { layout, data };
+}
+
+// Re-render all loaded Plotly figures with the current theme
+function relayoutAllPlots() {
+  const dark = _isDarkMode();
+  Object.entries(_loadedFigures).forEach(([id, figure]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const { layout, data } = _applyPlotlyTheme(figure, dark);
+    Plotly.purge(el);
+    Plotly.newPlot(el, data, layout, { responsive: true, displayModeBar: false });
+  });
+}
+
+// Expose so the toggle button script can call it
+window.relayoutAllPlots = relayoutAllPlots;
+
+// ── Auto-load all Plotly figures ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const plotlyFigures = document.querySelectorAll('.plotly-figure');
 
@@ -294,15 +355,12 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(src)
       .then(response => response.json())
       .then(figure => {
-        // Remove fixed width/height to make responsive and centered
-        const layout = {
-          ...figure.layout,
-          width: undefined,
-          height: undefined,
-          autosize: true,
-        };
+        // Store original figure for re-theming on toggle
+        _loadedFigures[plotContainer.id] = figure;
 
-        Plotly.newPlot(plotContainer.id, figure.data, layout, {
+        const { layout, data } = _applyPlotlyTheme(figure, _isDarkMode());
+
+        Plotly.newPlot(plotContainer.id, data, layout, {
           responsive: true,
           displayModeBar: false,
         });
